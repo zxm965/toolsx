@@ -1,0 +1,7 @@
+{
+  "editor.formatOnSave": true,
+  "opencclint.autoFixOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+}

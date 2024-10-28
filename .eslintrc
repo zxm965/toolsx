@@ -1,0 +1,13 @@
+{
+    "parserOptions": {
+        "ecmaVersion": 7,
+        "sourceType": "module"
+    },
+    "rules": {
+        "quotes": ["error", "single"],
+        "no-console": "off",
+        "no-restricted-syntax": 0,
+        "no-sequences": 0,
+        "no-use-before-define": 0
+    }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@papos/utils",
+  "version": "0.0.2",
+  "description": "Platform Operations",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apapos/tools.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "lib",
+    "shared"
+  ],
+  "author": "apapos",
+  "license": "ISC"
+}

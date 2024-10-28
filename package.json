@@ -1,0 +1,27 @@
+{
+  "name": "papos",
+  "version": "0.0.0",
+  "description": "Platform Operations",
+  "type": "module",
+  "scripts": {
+    "build": "unbuild",
+    "play:nuxt": "pnpm run -r --filter=./playground/nuxt dev",
+    "play:vite": "pnpm run -r --filter=./playground/vite dev",
+    "lint": "eslint --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apapos/tools.git"
+  },
+  "keywords": [
+    "lib",
+    "common"
+  ],
+  "author": "apapos",
+  "license": "MIT",
+  "packageManager": "pnpm@9.10.0",
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "unbuild": "^2.0.0"
+  }
+}
