@@ -1,12 +1,15 @@
 {
   "name": "@papos/shared",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Platform Operations",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/apapos/tools.git"
+  },
+  "scripts": {
+    "release": "npm publish"
   },
   "files": [
     "dist"

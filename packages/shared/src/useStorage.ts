@@ -7,7 +7,7 @@ type ExpirationLaterType = 'minutes' | 'hours' | 'days';
 interface SetItemOptions {
   laterThan?: number;
   laterType?: ExpirationLaterType;
-  // 未来可以添加更多选项，例如：
+  // can add more options in the future, such as:
   // isSensitive?: boolean;
 }
 

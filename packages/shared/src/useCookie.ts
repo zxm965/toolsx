@@ -4,12 +4,12 @@ export interface CookieOptions {
 }
 
 class Cookie {
-  // 设置方法
+  // set a cookie
   public set(name: string, value: string, options?: CookieOptions) {
     const { expires, onSuccess } = options || {};
     let useExpires = "";
     const date = new Date();
-    // 保留 30 minutes
+    // default to 30 minutes
     date.setTime((expires ? expires.getTime() : date.getTime()) + 30 * 60 * 1000);
     useExpires = `; expires=${date.toUTCString()}`;
     document.cookie = `${name}=${value || ""}${useExpires}; path=/`;
@@ -18,7 +18,7 @@ class Cookie {
     }
   }
 
-  // 获取方法
+  // get a cookie
   public get(name: string): string | null {
     const nameEQ = `${name}=`;
     const ca = document.cookie.split(";");
@@ -31,7 +31,7 @@ class Cookie {
     return null;
   }
 
-  // 移除方法
+  // remove a cookie
   public remove(name: string) {
     this.set(name, "", { expires: new Date(0) });
   }
