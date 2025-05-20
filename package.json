@@ -1,7 +1,7 @@
 {
-  "name": "papos",
+  "name": "extx",
   "version": "0.0.0",
-  "description": "Platform Operations",
+  "description": "Extensive Tools X",
   "type": "module",
   "scripts": {
     "build": "unbuild",
@@ -11,17 +11,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/apapos/tools.git"
+    "url": "git+https://github.com/zxm985/tools.git"
   },
   "keywords": [
     "lib",
     "common"
   ],
-  "author": "apapos",
+  "author": "zxm985",
   "license": "MIT",
-  "packageManager": "pnpm@9.10.0",
+  "packageManager": "pnpm@10.11.0",
   "devDependencies": {
-    "eslint": "^8.57.0",
-    "unbuild": "^2.0.0"
+    "eslint": "^9.27.0",
+    "unbuild": "^3.5.0",
+    "@types/node": "latest"
   }
 }

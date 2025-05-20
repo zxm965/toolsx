@@ -1,16 +1,17 @@
-import { defineBuildConfig } from 'unbuild'
+import { resolve } from "node:path";
+import { defineBuildConfig } from "unbuild";
 
-export default defineBuildConfig(
-  [
-    {
-      rootDir: 'packages/shared',
-      entries: ['./src/index.ts'],
-      declaration: true,
-    },
-    {
-      rootDir: 'packages/utils',
-      entries: ['./src/index.ts'],
-      declaration: true,
-    },
-  ]
-)
+export default defineBuildConfig([
+  {
+    entries: ["./index.ts"],
+    declaration: true,
+    clean: false,
+    rootDir: resolve(__dirname, "./packages/shared"),
+  },
+  {
+    entries: ["./index.ts"],
+    declaration: true,
+    clean: false,
+    rootDir: resolve(__dirname, "./packages/utils"),
+  },
+]);

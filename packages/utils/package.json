@@ -1,20 +1,20 @@
 {
-  "name": "@papos/utils",
-  "version": "0.0.2",
-  "description": "Platform Operations",
+  "name": "@extx/utils",
+  "version": "0.0.1",
+  "description": "Extensive Tools X's Utils",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/apapos/tools.git"
+    "url": "git+https://github.com/zxm985/tools.git"
   },
   "files": [
     "dist"
   ],
   "keywords": [
     "lib",
-    "shared"
+    "utils"
   ],
-  "author": "apapos",
+  "author": "zxm985",
   "license": "ISC"
 }

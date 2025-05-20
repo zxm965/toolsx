@@ -1,12 +1,12 @@
 {
-  "name": "@papos/shared",
-  "version": "0.0.3",
-  "description": "Platform Operations",
+  "name": "@extx/shared",
+  "version": "0.0.1",
+  "description": "Extensive Tools X's Shared",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/apapos/tools.git"
+    "url": "git+https://github.com/zxm985/tools.git"
   },
   "scripts": {
     "release": "npm publish"
@@ -18,6 +18,6 @@
     "lib",
     "shared"
   ],
-  "author": "apapos",
+  "author": "zxm985",
   "license": "ISC"
 }

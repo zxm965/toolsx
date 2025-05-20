@@ -1,4 +1,4 @@
-# @papos/shared
+# @extx/shared
 
 一些常用的JS工具。
 
@@ -7,13 +7,13 @@
 使用 pnpm 安装：
 
 ```bash
-pnpm add @papos/shared
+pnpm add @extx/shared
 ```
 
 ## 使用方法
 
 ```javascript
-import { Cookie } from '@papos/shared'
+import { Cookie } from '@extx/shared'
 
 // 示例代码
 const useCookies = new Cookie()
@@ -33,4 +33,3 @@ const useCookies = new Cookie()
 
 MIT License
 ```
-
