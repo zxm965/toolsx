@@ -1,5 +1,7 @@
 <template>
-  <div>1{{ msg }}</div>
+    <div>
+        {{ msg }}
+    </div>
 </template>
 <script setup lang="ts">
 defineProps<{ msg: string }>()

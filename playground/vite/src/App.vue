@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import HelloWorld from "./components/HelloWorld.vue";
-import { isNumber } from "@extx/utils";
-console.log(isNumber(42));
+import { isNumber } from '@extx/utils'
+import HelloWorld from './components/HelloWorld.vue'
+console.log(isNumber(42))
 </script>
 
 <template>
