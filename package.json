@@ -1,6 +1,6 @@
 {
   "name": "toolsx",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Tools X",
   "type": "module",
   "scripts": {
@@ -8,9 +8,7 @@
     "play:nuxt": "pnpm run -r --filter=./playground/nuxt dev",
     "play:vite": "pnpm run -r --filter=./playground/vite dev",
     "lint": "oxlint --fix",
-    "release:shared": "pnpm run -r --filter=./packages/shared release",
-    "release:utils": "pnpm run -r --filter=./packages/utils release",
-    "release": "pnpm run release:shared && pnpm run release:utils"
+    "release": "pnpm run build && npm publish"
   },
   "repository": {
     "type": "git",
@@ -23,6 +21,22 @@
   "files": [
     "dist"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./shared": {
+      "import": "./dist/shared/index.mjs",
+      "types": "./dist/shared/index.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/utils/index.mjs",
+      "types": "./dist/utils/index.d.ts"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
   "author": "zxm965",
   "license": "MIT",
   "packageManager": "pnpm@10.18.2",

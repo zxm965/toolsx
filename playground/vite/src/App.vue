@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { isNumber } from '@extx/utils'
+import { isNumber } from 'toolsx'
 import HelloWorld from './components/HelloWorld.vue'
 console.log(isNumber(42))
 </script>
