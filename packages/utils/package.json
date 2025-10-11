@@ -8,6 +8,9 @@
     "type": "git",
     "url": "git+https://github.com/zxm985/tools.git"
   },
+  "scripts": {
+    "release": "npm publish --access public"
+  },
   "files": [
     "dist"
   ],

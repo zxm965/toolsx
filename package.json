@@ -1,31 +1,34 @@
 {
-  "name": "extx",
-  "version": "0.0.0",
-  "description": "Extensive Tools X",
+  "name": "toolsx",
+  "version": "0.0.1",
+  "description": "Tools X",
   "type": "module",
   "scripts": {
     "build": "unbuild",
     "play:nuxt": "pnpm run -r --filter=./playground/nuxt dev",
     "play:vite": "pnpm run -r --filter=./playground/vite dev",
-    "lint": "eslint --fix --ext .js,.ts,.vue .",
-    "publish:shared": "pnpm run -r --filter=./packages/shared release",
-    "publish:utils": "pnpm run -r --filter=./packages/utils release",
-    "publish": "pnpm run publish:shared && pnpm run publish:utils"
+    "lint": "oxlint --fix",
+    "release:shared": "pnpm run -r --filter=./packages/shared release",
+    "release:utils": "pnpm run -r --filter=./packages/utils release",
+    "release": "pnpm run release:shared && pnpm run release:utils"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zxm985/tools.git"
+    "url": "git+https://github.com/zxm965/tools.git"
   },
   "keywords": [
     "lib",
     "common"
   ],
-  "author": "zxm985",
+  "files": [
+    "dist"
+  ],
+  "author": "zxm965",
   "license": "MIT",
-  "packageManager": "pnpm@10.11.0",
+  "packageManager": "pnpm@10.18.2",
   "devDependencies": {
     "@types/node": "latest",
-    "standard": "^17.1.2",
-    "unbuild": "^3.5.0"
+    "oxlint": "^1.22.0",
+    "unbuild": "^3.6.1"
   }
 }

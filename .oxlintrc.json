@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "no-alert": "error",
+    "oxc/approx-constant": "warn",
+    "no-plusplus": "off",
+    "no-var": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "varsIgnorePattern": "^_",
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "typescript/triple-slash-reference": "off"
+  },
+  "ignorePatterns": [
+    "node_modules"
+  ]
+}

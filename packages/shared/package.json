@@ -4,12 +4,13 @@
   "description": "Extensive Tools X's Shared",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "private": false,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zxm985/tools.git"
   },
   "scripts": {
-    "release": "npm publish"
+    "release": "npm publish --access public"
   },
   "files": [
     "dist"
