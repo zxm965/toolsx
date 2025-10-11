@@ -1,13 +1,13 @@
 {
-  "name": "@extx/shared",
+  "name": "@toolsx/shared",
   "version": "0.0.1",
-  "description": "Extensive Tools X's Shared",
+  "description": "Tools X's Shared",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "private": false,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zxm985/tools.git"
+    "url": "git+https://github.com/zxm965/tools.git"
   },
   "scripts": {
     "release": "npm publish --access public"
@@ -19,6 +19,6 @@
     "lib",
     "shared"
   ],
-  "author": "zxm985",
+  "author": "zxm965",
   "license": "ISC"
 }
