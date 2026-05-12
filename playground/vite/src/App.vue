@@ -1,26 +1,61 @@
 <script setup lang="ts">
-import { isNumber } from 'toolsx'
-import HelloWorld from './components/HelloWorld.vue'
-console.log(isNumber(42))
+import { computed, nextTick, onMounted, ref } from 'vue'
+
+import ArrayChunkDemo from './components/ArrayChunkDemo.vue'
+import DataCleanDemo from './components/DataCleanDemo.vue'
+import EventLogDemo from './components/EventLogDemo.vue'
+import ExecutionRecords from './components/ExecutionRecords.vue'
+import GroupByDemo from './components/GroupByDemo.vue'
+import HeroPanel from './components/HeroPanel.vue'
+import RetryDemo from './components/RetryDemo.vue'
+import StorageDemo from './components/StorageDemo.vue'
+import type { RunRecord, RunRecordInput } from './types/playground'
+
+const logs = ref<string[]>(['页面已加载，等待操作'])
+const records = ref<RunRecord[]>([])
+const runId = ref(0)
+const latestRecord = computed(() => records.value[0])
+const arrayDemo = ref<InstanceType<typeof ArrayChunkDemo>>()
+const groupDemo = ref<InstanceType<typeof GroupByDemo>>()
+const dataDemo = ref<InstanceType<typeof DataCleanDemo>>()
+
+function now() {
+  return new Date().toLocaleTimeString('zh-CN')
+}
+
+function addRecord(record: RunRecordInput) {
+  records.value.unshift({ id: ++runId.value, ...record, time: now() })
+}
+
+function addLog(message: string) {
+  logs.value.unshift(message)
+}
+
+async function runVisualDemo() {
+  addRecord({ title: '可视化流程', status: '执行中', detail: '开始逐步执行各组件中的测试逻辑' })
+  await arrayDemo.value?.run()
+  await groupDemo.value?.run()
+  await dataDemo.value?.run()
+}
+
+onMounted(async () => {
+  await nextTick()
+  runVisualDemo()
+})
 </script>
 
 <template>
-    <HelloWorld msg="Vite + Vue" />
+  <main class="page-shell">
+    <HeroPanel @replay="runVisualDemo" />
+
+    <section class="dashboard">
+      <ArrayChunkDemo ref="arrayDemo" @record="addRecord" />
+      <ExecutionRecords :latest-record="latestRecord" :records="records" />
+      <GroupByDemo ref="groupDemo" @record="addRecord" />
+      <DataCleanDemo ref="dataDemo" @record="addRecord" />
+      <StorageDemo @record="addRecord" @log="addLog" />
+      <RetryDemo @record="addRecord" @log="addLog" />
+      <EventLogDemo :logs="logs" />
+    </section>
+  </main>
 </template>
-
-<style scoped>
-.logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
-}
-
-.logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.vue:hover {
-    filter: drop-shadow(0 0 2em #42b883aa);
-}
-</style>

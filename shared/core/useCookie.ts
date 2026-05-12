@@ -1,41 +1,72 @@
+export type CookieSameSite = 'Strict' | 'Lax' | 'None'
+
 export interface CookieOptions {
-  expires?: Date
+  expires?: Date | number
+  maxAge?: number
+  path?: string
+  domain?: string
+  sameSite?: CookieSameSite
+  secure?: boolean
   onSuccess?: () => void
 }
 
-class Cookie {
-  // set a cookie
-  public set(name: string, value: string, options?: CookieOptions) {
-    const { expires, onSuccess } = options || {}
-    let useExpires = ''
-    const date = new Date()
-    // default to 30 minutes
-    date.setTime(
-      (expires ? expires.getTime() : date.getTime()) + 30 * 60 * 1000,
-    )
-    useExpires = `; expires=${date.toUTCString()}`
-    document.cookie = `${name}=${value || ''}${useExpires}; path=/`
-    if (typeof onSuccess === 'function') {
-      onSuccess()
-    }
+function normalizeExpires(expires?: Date | number) {
+  if (expires === undefined) {
+    return undefined
   }
 
-  // get a cookie
-  public get(name: string): string | null {
-    const nameEQ = `${name}=`
-    const ca = document.cookie.split(';')
-    for (let i = 0; i < ca.length; i += 1) {
-      let c = ca[i]
-      while (c.charAt(0) === ' ') c = c.substring(1, c.length)
-      if (c.indexOf(nameEQ) === 0)
-        return c.substring(nameEQ.length, c.length) as string
+  return expires instanceof Date ? expires : new Date(expires)
+}
+
+class Cookie {
+  public set(name: string, value: string, options: CookieOptions = {}) {
+    const { domain, maxAge, onSuccess, path = '/', sameSite, secure } = options
+    const expires = normalizeExpires(options.expires)
+    const segments = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`]
+
+    if (expires) {
+      segments.push(`expires=${expires.toUTCString()}`)
     }
+
+    if (maxAge !== undefined) {
+      segments.push(`max-age=${maxAge}`)
+    }
+
+    if (domain) {
+      segments.push(`domain=${domain}`)
+    }
+
+    if (path) {
+      segments.push(`path=${path}`)
+    }
+
+    if (sameSite) {
+      segments.push(`samesite=${sameSite}`)
+    }
+
+    if (secure) {
+      segments.push('secure')
+    }
+
+    document.cookie = segments.join('; ')
+    onSuccess?.()
+  }
+
+  public get(name: string): string | null {
+    const encodedName = `${encodeURIComponent(name)}=`
+    const cookies = document.cookie ? document.cookie.split('; ') : []
+
+    for (const cookie of cookies) {
+      if (cookie.startsWith(encodedName)) {
+        return decodeURIComponent(cookie.slice(encodedName.length))
+      }
+    }
+
     return null
   }
 
-  // remove a cookie
-  public remove(name: string) {
-    this.set(name, '', { expires: new Date(0) })
+  public remove(name: string, options: Pick<CookieOptions, 'domain' | 'path'> = {}) {
+    this.set(name, '', { ...options, expires: new Date(0), maxAge: 0 })
   }
 }
 

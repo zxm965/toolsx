@@ -1,21 +1,32 @@
 {
   "name": "toolsx",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Tools X",
   "keywords": [
     "common",
-    "lib"
+    "cookie",
+    "event-emitter",
+    "lib",
+    "request",
+    "storage",
+    "typescript",
+    "utils"
   ],
+  "homepage": "https://github.com/zxm965/toolsx#readme",
+  "bugs": {
+    "url": "https://github.com/zxm965/toolsx/issues"
+  },
   "license": "MIT",
   "author": "zxm965",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zxm965/tools.git"
+    "url": "git+https://github.com/zxm965/toolsx.git"
   },
   "files": [
     "dist"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     "./shared": {
       "import": "./dist/shared/index.mjs",
@@ -28,8 +39,7 @@
   },
   "scripts": {
     "build": "unbuild",
-    "play:nuxt": "pnpm run -r --filter=./playground/nuxt dev",
-    "play:vite": "pnpm run -r --filter=./playground/vite dev",
+    "dev": "pnpm run -r --filter=./playground/vite dev",
     "lint": "oxlint --fix",
     "release": "pnpm run build && npm publish"
   },

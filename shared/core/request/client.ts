@@ -3,24 +3,27 @@ import { FetchError, ofetch } from 'ofetch'
 import { RequestError, normalizeRequestError } from './errors'
 import type {
   CreateRequestOptions,
+  FetchOptions,
   FetchRequest,
   FetchResponse,
   MappedResponseType,
+  RequestFailure,
+  RequestInstance,
+  RequestMethod,
   RequestOptions,
   RequestResult,
-  RequestInstance,
   ResponseType
 } from './types'
-import { mergeHeaders, mergeSignals } from './utils'
+import { createAuthorizationHeader, mergeHeaders, mergeSignals } from './utils'
 
 const defaultConfig: CreateRequestOptions = {
-  baseURL: process.env.EXPO_PUBLIC_API_BASE_URL,
   timeout: 15_000,
-  headers: { Accept: 'application/json', 'Content-Type': 'application/json' }
+  headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+  retry: 0
 }
 
 function resolveMethodOptions<R extends ResponseType, T = unknown, TResult = MappedResponseType<R, T>>(
-  method: string,
+  method: RequestMethod,
   options?: RequestOptions<R, T, TResult>
 ) {
   return { ...options, method } satisfies RequestOptions<R, T, TResult>
@@ -37,8 +40,63 @@ async function applyTransform<R extends ResponseType, T = unknown, TResult = Map
   return await options.transform(data)
 }
 
+async function validateResponse<R extends ResponseType, T = unknown, TResult = MappedResponseType<R, T>>(
+  data: MappedResponseType<R, T>,
+  response: FetchResponse<MappedResponseType<R, T>>,
+  options?: RequestOptions<R, T, TResult>
+) {
+  const validationResult = await options?.validateResponse?.(data, response)
+
+  if (validationResult === false) {
+    throw new RequestError('Response validation failed', { status: response.status, data })
+  }
+
+  if (typeof validationResult === 'string') {
+    throw new RequestError(validationResult, { status: response.status, data })
+  }
+
+  if (validationResult instanceof RequestError) {
+    throw validationResult
+  }
+}
+
 function getErrorHeaders(error: unknown) {
   return error instanceof FetchError ? (error.response?.headers ?? null) : null
+}
+
+function getErrorStatus(error: unknown) {
+  return error instanceof FetchError ? error.response?.status : undefined
+}
+
+function createFailure(error: unknown): RequestFailure {
+  const normalizedError = normalizeRequestError(error)
+
+  return {
+    response: null,
+    headers: getErrorHeaders(error),
+    status: getErrorStatus(error) ?? normalizedError.status,
+    error: normalizedError
+  }
+}
+
+function createSuccess<T>(response: T, headers: Headers, status?: number): RequestResult<T> {
+  return { response, headers, status, error: null }
+}
+
+async function runHook(callback: (() => void | Promise<void>) | undefined) {
+  try {
+    await callback?.()
+  } catch {
+    // Hooks are observability/extension points and should not replace the original request result.
+  }
+}
+
+async function resolveRequestOptions<R extends ResponseType>(url: FetchRequest, options: FetchOptions<R>, config: CreateRequestOptions) {
+  const token = await config.getToken?.()
+  const hookOptions = (await config.onRequest?.({ url, options })) ?? options
+  const headers = mergeHeaders(hookOptions.headers, createAuthorizationHeader(token, config.auth))
+
+  return { ...hookOptions, headers }
 }
 
 export function createRequestClient(config: CreateRequestOptions = {}): RequestInstance {
@@ -48,53 +106,48 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
     headers: mergeHeaders(defaultConfig.headers, config.headers)
   }
 
-  const client = ofetch.create({
-    baseURL: mergedConfig.baseURL,
-    timeout: mergedConfig.timeout,
-    headers: mergedConfig.headers,
-    retry: 0
-  })
+  const { auth: _auth, getToken: _getToken, onError: _onError, onRequest: _onRequest, onResponse: _onResponse, ...fetchConfig } = mergedConfig
+  const client = ofetch.create(fetchConfig)
 
   const request = (async <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(
     url: FetchRequest,
     options: RequestOptions<R, T, TResult> = {}
   ) => {
     try {
-      const token = await mergedConfig.getToken?.()
-      const nextOptions = (await mergedConfig.onRequest?.(url, options)) ?? options
-      const headers = mergeHeaders(nextOptions.headers, token ? { Authorization: `Bearer ${token}` } : undefined)
-      const rawResponse = await client.raw<T, R>(url, { ...nextOptions, headers })
+      const { transform: _transform, validateResponse: _validateResponse, ...fetchOptions } = options
+      const nextOptions = await resolveRequestOptions(url, fetchOptions, mergedConfig)
+      const rawResponse = await client.raw<T, R>(url, nextOptions)
       const data = rawResponse._data as MappedResponseType<R, T>
+      const typedResponse = rawResponse as FetchResponse<MappedResponseType<R, T>>
+      await validateResponse(data, typedResponse, options)
+      await runHook(() => mergedConfig.onResponse?.({ url, options: nextOptions, response: typedResponse, data }))
       const response = await applyTransform<R, T, TResult>(data, options)
 
-      return { response, headers: rawResponse.headers, error: null }
+      return createSuccess(response, rawResponse.headers, rawResponse.status)
     } catch (error) {
-      return {
-        response: null,
-        headers: getErrorHeaders(error),
-        error: normalizeRequestError(error)
-      }
+      const result = createFailure(error)
+      await runHook(() => mergedConfig.onError?.({ url, options, error: result.error }))
+
+      return result
     }
   }) as RequestInstance
 
   request.raw = async <T = unknown, R extends ResponseType = 'json'>(
     url: FetchRequest,
-    options: RequestOptions<R, T> = {}
+    options: FetchOptions<R> = {}
   ): Promise<RequestResult<FetchResponse<MappedResponseType<R, T>>>> => {
     try {
-      const token = await mergedConfig.getToken?.()
-      const nextOptions = (await mergedConfig.onRequest?.(url, options)) ?? options
-      const headers = mergeHeaders(nextOptions.headers, token ? { Authorization: `Bearer ${token}` } : undefined)
+      const nextOptions = await resolveRequestOptions(url, options, mergedConfig)
+      const response = await client.raw<T, R>(url, nextOptions)
+      const typedResponse = response as FetchResponse<MappedResponseType<R, T>>
+      await runHook(() => mergedConfig.onResponse?.({ url, options: nextOptions, response: typedResponse, data: typedResponse._data }))
 
-      const response = await client.raw<T, R>(url, { ...nextOptions, headers })
-
-      return { response, headers: response.headers, error: null }
+      return createSuccess(typedResponse, response.headers, response.status)
     } catch (error) {
-      return {
-        response: null,
-        headers: getErrorHeaders(error),
-        error: normalizeRequestError(error)
-      }
+      const result = createFailure(error)
+      await runHook(() => mergedConfig.onError?.({ url, options, error: result.error }))
+
+      return result
     }
   }
 
@@ -108,7 +161,7 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
 
     return {
       controller,
-      abort: () => controller.abort(),
+      abort: (reason?: unknown) => controller.abort(reason),
       promise: request<T, R, TResult>(url, {
         ...options,
         signal: mergeSignals(options?.signal, controller.signal)
@@ -116,47 +169,32 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
     }
   }
 
-  request.get = <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(
-    url: FetchRequest,
-    options?: RequestOptions<R, T, TResult>
-  ) => request<T, R, TResult>(url, resolveMethodOptions('GET', options))
-  request.post = <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(
-    url: FetchRequest,
-    options?: RequestOptions<R, T, TResult>
-  ) => request<T, R, TResult>(url, resolveMethodOptions('POST', options))
-  request.put = <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(
-    url: FetchRequest,
-    options?: RequestOptions<R, T, TResult>
-  ) => request<T, R, TResult>(url, resolveMethodOptions('PUT', options))
-  request.patch = <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(
-    url: FetchRequest,
-    options?: RequestOptions<R, T, TResult>
-  ) => request<T, R, TResult>(url, resolveMethodOptions('PATCH', options))
-  request.delete = <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(
-    url: FetchRequest,
-    options?: RequestOptions<R, T, TResult>
-  ) => request<T, R, TResult>(url, resolveMethodOptions('DELETE', options))
+  const createShortcut =
+    (method: RequestMethod) =>
+    <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
+      request<T, R, TResult>(url, resolveMethodOptions(method, options))
+
+  const createAbortableShortcut =
+    (method: RequestMethod) =>
+    <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
+      request.withAbort<T, R, TResult>(url, resolveMethodOptions(method, options))
+
+  request.get = createShortcut('GET')
+  request.post = createShortcut('POST')
+  request.put = createShortcut('PUT')
+  request.patch = createShortcut('PATCH')
+  request.delete = createShortcut('DELETE')
+  request.head = createShortcut('HEAD')
+  request.options = createShortcut('OPTIONS')
 
   request.abortable = {
-    get: <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
-      request.withAbort<T, R, TResult>(url, resolveMethodOptions('GET', options)),
-    post: <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
-      request.withAbort<T, R, TResult>(url, resolveMethodOptions('POST', options)),
-    put: <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
-      request.withAbort<T, R, TResult>(url, resolveMethodOptions('PUT', options)),
-    patch: <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
-      request.withAbort<T, R, TResult>(url, resolveMethodOptions('PATCH', options)),
-    delete: <T = unknown, R extends ResponseType = 'json', TResult = MappedResponseType<R, T>>(url: FetchRequest, options?: RequestOptions<R, T, TResult>) =>
-      request.withAbort<T, R, TResult>(url, resolveMethodOptions('DELETE', options))
+    get: createAbortableShortcut('GET'),
+    post: createAbortableShortcut('POST'),
+    put: createAbortableShortcut('PUT'),
+    patch: createAbortableShortcut('PATCH'),
+    delete: createAbortableShortcut('DELETE'),
+    head: createAbortableShortcut('HEAD'),
+    options: createAbortableShortcut('OPTIONS')
   }
-
-  return request
-}
-
-export let request = createRequestClient()
-
-export function setRequestClient(nextRequest: RequestInstance) {
-  request = nextRequest
-
   return request
 }

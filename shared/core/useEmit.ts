@@ -1,59 +1,72 @@
-// define the type of event listener
-type EventListener<T> = (event: T) => void
+export type EventListener<T> = (event: T) => void
+export type Unsubscribe = () => void
 
-// create a event emitter class
-class EventEmitter<T> {
+class EventEmitter<T extends object> {
   private listeners: {
     [K in keyof T]?: EventListener<T[K]>[]
   } = {}
 
-  // create a event listener
-  on<K extends keyof T>(eventName: K, listener: EventListener<T[K]>): void {
+  on<K extends keyof T>(eventName: K, listener: EventListener<T[K]>): Unsubscribe {
     if (!this.listeners[eventName]) {
       this.listeners[eventName] = []
     }
+
     this.listeners[eventName]!.push(listener)
+
+    return () => this.off(eventName, listener)
   }
 
-  // remove a event listener
   off<K extends keyof T>(eventName: K, listener: EventListener<T[K]>): void {
     if (!this.listeners[eventName]) return
-    this.listeners[eventName] = this.listeners[eventName]!.filter(
-      (l) => l !== listener,
-    )
+    this.listeners[eventName] = this.listeners[eventName]!.filter((item) => item !== listener)
   }
 
-  // create a event listener that only trigger once
-  once<K extends keyof T>(event: K, listener: EventListener<T[K]>): void {
+  once<K extends keyof T>(eventName: K, listener: EventListener<T[K]>): Unsubscribe {
     const onceListener: EventListener<T[K]> = (data) => {
-      this.off(event, onceListener)
+      this.off(eventName, onceListener)
       listener(data)
     }
-    this.on(event, onceListener)
+
+    return this.on(eventName, onceListener)
   }
 
-  // trigger a event
-  emit<K extends keyof T>(eventName: K, event: T[K]): void {
-    if (!this.listeners[eventName]) return
-    this.listeners[eventName]!.forEach((listener) => listener(event))
+  emit<K extends keyof T>(eventName: K, ...args: undefined extends T[K] ? [event?: T[K]] : [event: T[K]]): void {
+    const eventListeners = [...(this.listeners[eventName] ?? [])]
+
+    eventListeners.forEach((listener) => listener(args[0] as T[K]))
+  }
+
+  safeEmit<K extends keyof T>(eventName: K, ...args: undefined extends T[K] ? [event?: T[K]] : [event: T[K]]) {
+    const errors: unknown[] = []
+    const eventListeners = [...(this.listeners[eventName] ?? [])]
+
+    eventListeners.forEach((listener) => {
+      try {
+        listener(args[0] as T[K])
+      } catch (error) {
+        errors.push(error)
+      }
+    })
+
+    return errors
+  }
+
+  clear<K extends keyof T>(eventName?: K): void {
+    if (eventName === undefined) {
+      this.listeners = {}
+      return
+    }
+
+    delete this.listeners[eventName]
+  }
+
+  listenerCount<K extends keyof T>(eventName: K) {
+    return this.listeners[eventName]?.length ?? 0
   }
 }
 
-/**
- * @description create a listener helper function
- * you can use this helper function to create a listener
- * @example
- * type Events = {
- *  event: string
- * }
- * const emitter = new EventEmitter<Events>()
- * const createListener = createListenerHelper<Events>()
- * const listener = createListener('event', (data) => {})
- * emitter.on('event', listener)
- * emitter.off('event', listener)
- */
 const createListenerHelper =
-  <T>() =>
+  <T extends object>() =>
   <K extends keyof T>(_: K, listener: EventListener<T[K]>) =>
     listener
 

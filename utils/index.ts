@@ -1,3 +1,7 @@
-const isNumber = (value: any): value is number => typeof value === 'number';
-const isString = (value: any): value is string => typeof value === 'string';
-export { isNumber, isString };
+export * from './core/array'
+export * from './core/async'
+export * from './core/json'
+export * from './core/number'
+export * from './core/object'
+export * from './core/string'
+export * from './core/type'
