@@ -1,31 +1,22 @@
 {
   "name": "toolsx",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Tools X",
-  "type": "module",
-  "scripts": {
-    "build": "unbuild",
-    "play:nuxt": "pnpm run -r --filter=./playground/nuxt dev",
-    "play:vite": "pnpm run -r --filter=./playground/vite dev",
-    "lint": "oxlint --fix",
-    "release": "pnpm run build && npm publish"
-  },
+  "keywords": [
+    "common",
+    "lib"
+  ],
+  "license": "MIT",
+  "author": "zxm965",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zxm965/tools.git"
   },
-  "keywords": [
-    "lib",
-    "common"
-  ],
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
-    },
     "./shared": {
       "import": "./dist/shared/index.mjs",
       "types": "./dist/shared/index.d.ts"
@@ -35,14 +26,21 @@
       "types": "./dist/utils/index.d.ts"
     }
   },
-  "types": "./dist/index.d.ts",
-  "main": "./dist/index.mjs",
-  "author": "zxm965",
-  "license": "MIT",
-  "packageManager": "pnpm@10.18.2",
+  "scripts": {
+    "build": "unbuild",
+    "play:nuxt": "pnpm run -r --filter=./playground/nuxt dev",
+    "play:vite": "pnpm run -r --filter=./playground/vite dev",
+    "lint": "oxlint --fix",
+    "release": "pnpm run build && npm publish"
+  },
+  "dependencies": {
+    "ofetch": "^1.5.1"
+  },
   "devDependencies": {
     "@types/node": "latest",
-    "oxlint": "^1.22.0",
+    "oxfmt": "^0.48.0",
+    "oxlint": "^1.63.0",
     "unbuild": "^3.6.1"
-  }
+  },
+  "packageManager": "pnpm@11.0.9"
 }
