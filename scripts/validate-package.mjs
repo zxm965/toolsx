@@ -4,8 +4,8 @@ import { resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '..')
 const packageJson = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))
 const requiredExports = {
-  './shared': ['Cookie', 'EventEmitter', 'StorageWithExpiration', 'createRequestClient'],
-  './utils': ['chunk', 'debounce', 'deepMerge', 'retry', 'safeJsonParse']
+  './shared': ['AsyncStorageWithExpiration', 'Cookie', 'EventEmitter', 'StorageWithExpiration', 'createMemoryRequestCache', 'createRequestClient'],
+  './utils': ['chunk', 'createLimiter', 'debounce', 'deepMerge', 'noop', 'poll', 'retry', 'safeJsonParse', 'stableJsonStringify', 'uniqueBy']
 }
 
 for (const [subpath, names] of Object.entries(requiredExports)) {

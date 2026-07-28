@@ -6,6 +6,10 @@ export interface EventListenerOptions {
   signal?: AbortSignal
 }
 
+export interface EventWaitOptions extends EventListenerOptions {
+  timeout?: number
+}
+
 export interface EventEmitterOptions<T extends object> {
   maxListeners?: number
   onMaxListenersExceeded?: (eventName: keyof T | string, count: number) => void
@@ -221,6 +225,12 @@ class EventEmitter<T extends object> {
     }
   }
 
+  async emitParallel<K extends keyof T>(eventName: K, ...args: undefined extends T[K] ? [event?: T[K]] : [event: T[K]]) {
+    const invocations = this.collectInvocations(eventName, args[0] as T[K])
+    invocations.forEach((invocation) => invocation.remove())
+    await Promise.all(invocations.map((invocation) => Promise.resolve().then(invocation.run)))
+  }
+
   async safeEmitAsync<K extends keyof T>(eventName: K, ...args: undefined extends T[K] ? [event?: T[K]] : [event: T[K]]) {
     const errors: unknown[] = []
 
@@ -235,6 +245,47 @@ class EventEmitter<T extends object> {
     }
 
     return errors
+  }
+
+  waitFor<K extends keyof T>(eventName: K, options: EventWaitOptions = {}) {
+    if (options.signal?.aborted) {
+      return Promise.reject(options.signal.reason instanceof Error ? options.signal.reason : new DOMException('Event wait aborted', 'AbortError'))
+    }
+
+    if (options.timeout !== undefined && (!Number.isFinite(options.timeout) || options.timeout < 0)) {
+      return Promise.reject(new RangeError('timeout must be a non-negative finite number'))
+    }
+
+    return new Promise<T[K]>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+
+      const cleanup = () => {
+        unsubscribe()
+        options.signal?.removeEventListener('abort', abort)
+        if (timer) clearTimeout(timer)
+      }
+      const abort = () => {
+        cleanup()
+        reject(options.signal?.reason instanceof Error ? options.signal.reason : new DOMException('Event wait aborted', 'AbortError'))
+      }
+      const unsubscribe = this.once(
+        eventName,
+        (payload) => {
+          cleanup()
+          resolve(payload)
+        },
+        { priority: options.priority }
+      )
+
+      options.signal?.addEventListener('abort', abort, { once: true })
+
+      if (options.timeout !== undefined) {
+        timer = setTimeout(() => {
+          cleanup()
+          reject(new Error(`Timed out waiting for event: ${String(eventName)}`))
+        }, options.timeout)
+      }
+    })
   }
 
   clear<K extends keyof T>(eventName?: K): void {
@@ -256,6 +307,14 @@ class EventEmitter<T extends object> {
 
   listenerCount<K extends keyof T>(eventName: K) {
     return this.listeners.get(eventName)?.length ?? 0
+  }
+
+  eventNames() {
+    return [...this.listeners.keys()]
+  }
+
+  hasListeners<K extends keyof T>(eventName?: K) {
+    return eventName === undefined ? this.totalListenerCount() > 0 : this.listenerCount(eventName) > 0
   }
 
   totalListenerCount() {

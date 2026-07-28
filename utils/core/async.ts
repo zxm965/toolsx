@@ -1,4 +1,6 @@
-import type { AnyFunction } from './type'
+import type { AnyFunction, RandomSource } from './type'
+
+export type Awaitable<T> = T | PromiseLike<T>
 
 export interface DebounceOptions {
   leading?: boolean
@@ -31,6 +33,7 @@ export interface RetryOptions {
   factor?: number
   jitter?: boolean | ((delay: number, context: RetryContext & { error: unknown }) => number)
   maxDelay?: number
+  random?: RandomSource
   retries?: number
   shouldRetry?: (error: unknown, context: RetryContext) => boolean | Promise<boolean>
   signal?: AbortSignal
@@ -38,6 +41,38 @@ export interface RetryOptions {
 
 export interface PromisePoolOptions {
   signal?: AbortSignal
+}
+
+export interface AsyncCollectionOptions extends PromisePoolOptions {
+  concurrency?: number
+}
+
+export interface PollContext {
+  attempt: number
+  elapsed: number
+  signal: AbortSignal
+}
+
+export interface PollOptions<T> {
+  interval?: number | ((context: PollContext & { value: T }) => number)
+  maxAttempts?: number
+  signal?: AbortSignal
+  timeout?: number
+  until: (value: T, context: PollContext) => boolean | Promise<boolean>
+}
+
+export interface AbortGroup {
+  abort: (reason?: unknown) => void
+  add: (signal: AbortSignal | null | undefined) => () => void
+  controller: AbortController
+  signal: AbortSignal
+}
+
+export interface ConcurrencyLimiter {
+  <T>(task: () => Awaitable<T>, signal?: AbortSignal): Promise<T>
+  readonly activeCount: number
+  clearQueue: (reason?: unknown) => void
+  readonly pendingCount: number
 }
 
 export interface MemoizedFunction<T extends AnyFunction, TKey> {
@@ -68,8 +103,6 @@ export type MemoizedAsyncFunction<T extends (...args: never[]) => Promise<unknow
   clear: () => void
   delete: (key: TKey) => boolean
 }
-
-export const noop = () => {}
 
 function createAbortError(signal?: AbortSignal) {
   if (signal?.reason instanceof Error) {
@@ -144,7 +177,12 @@ export async function retry<T>(fn: (context: RetryContext) => Promise<T>, timesO
       const delayContext = { ...context, error }
       const baseDelay = typeof options.delay === 'function' ? options.delay(delayContext) : (options.delay ?? 0) * Math.pow(options.factor ?? 1, attempt - 1)
       const cappedDelay = Math.min(Math.max(0, baseDelay), options.maxDelay ?? Number.POSITIVE_INFINITY)
-      const wait = typeof options.jitter === 'function' ? options.jitter(cappedDelay, delayContext) : options.jitter ? Math.random() * cappedDelay : cappedDelay
+      const wait =
+        typeof options.jitter === 'function'
+          ? options.jitter(cappedDelay, delayContext)
+          : options.jitter
+            ? (options.random ?? Math.random)() * cappedDelay
+            : cappedDelay
 
       if (wait > 0) {
         await sleep(wait, options.signal)
@@ -178,6 +216,165 @@ export function withResolvers<T>() {
   })
 
   return { promise, resolve, reject }
+}
+
+export function raceWithSignal<T>(promise: PromiseLike<T>, signal?: AbortSignal) {
+  if (!signal) return Promise.resolve(promise)
+  if (signal.aborted) return Promise.reject(createAbortError(signal))
+
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(createAbortError(signal))
+    signal.addEventListener('abort', abort, { once: true })
+
+    Promise.resolve(promise)
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', abort))
+  })
+}
+
+export function createAbortGroup(...signals: (AbortSignal | null | undefined)[]): AbortGroup {
+  const controller = new AbortController()
+  const cleanups = new Set<() => void>()
+
+  const clear = () => {
+    cleanups.forEach((cleanup) => cleanup())
+    cleanups.clear()
+  }
+
+  controller.signal.addEventListener('abort', clear, { once: true })
+
+  const add = (signal: AbortSignal | null | undefined) => {
+    if (!signal || controller.signal.aborted) return () => {}
+
+    if (signal.aborted) {
+      controller.abort(signal.reason)
+      return () => {}
+    }
+
+    const abort = () => controller.abort(signal.reason)
+    const cleanup = () => {
+      signal.removeEventListener('abort', abort)
+      cleanups.delete(cleanup)
+    }
+
+    signal.addEventListener('abort', abort, { once: true })
+    cleanups.add(cleanup)
+    return cleanup
+  }
+
+  signals.forEach(add)
+
+  return {
+    abort: (reason?: unknown) => controller.abort(reason),
+    add,
+    controller,
+    signal: controller.signal
+  }
+}
+
+interface LimiterQueueEntry<T> {
+  reject: (reason?: unknown) => void
+  resolve: (value: T | PromiseLike<T>) => void
+  signal?: AbortSignal
+  task: () => Awaitable<T>
+  unsubscribe?: () => void
+}
+
+export function createLimiter(concurrency: number): ConcurrencyLimiter {
+  if (!Number.isInteger(concurrency) || concurrency <= 0) {
+    throw new RangeError('concurrency must be a positive integer')
+  }
+
+  let activeCount = 0
+  const queue: LimiterQueueEntry<unknown>[] = []
+
+  const runNext = () => {
+    while (activeCount < concurrency && queue.length) {
+      const entry = queue.shift()!
+      entry.unsubscribe?.()
+
+      if (entry.signal?.aborted) {
+        entry.reject(createAbortError(entry.signal))
+        continue
+      }
+
+      activeCount += 1
+      Promise.resolve()
+        .then(entry.task)
+        .then(entry.resolve, entry.reject)
+        .finally(() => {
+          activeCount -= 1
+          runNext()
+        })
+    }
+  }
+
+  const limit = (<T>(task: () => Awaitable<T>, signal?: AbortSignal) => {
+    if (signal?.aborted) return Promise.reject(createAbortError(signal))
+
+    return new Promise<T>((resolve, reject) => {
+      const entry: LimiterQueueEntry<T> = { reject, resolve, signal, task }
+
+      if (signal) {
+        const abort = () => {
+          const index = queue.indexOf(entry as LimiterQueueEntry<unknown>)
+          if (index >= 0) queue.splice(index, 1)
+          reject(createAbortError(signal))
+        }
+        signal.addEventListener('abort', abort, { once: true })
+        entry.unsubscribe = () => signal.removeEventListener('abort', abort)
+      }
+
+      queue.push(entry as LimiterQueueEntry<unknown>)
+      runNext()
+    })
+  }) as ConcurrencyLimiter
+
+  Object.defineProperties(limit, {
+    activeCount: { get: () => activeCount },
+    pendingCount: { get: () => queue.length }
+  })
+
+  limit.clearQueue = (reason = new Error('Concurrency limiter queue cleared')) => {
+    const entries = queue.splice(0)
+    entries.forEach((entry) => {
+      entry.unsubscribe?.()
+      entry.reject(reason)
+    })
+  }
+
+  return limit
+}
+
+export async function poll<T>(fn: (context: PollContext) => Awaitable<T>, options: PollOptions<T>) {
+  const { maxAttempts, timeout: timeoutDuration } = options
+
+  if (maxAttempts !== undefined && (!Number.isInteger(maxAttempts) || maxAttempts <= 0)) {
+    throw new RangeError('maxAttempts must be a positive integer')
+  }
+  if (timeoutDuration !== undefined && (!Number.isFinite(timeoutDuration) || timeoutDuration < 0)) {
+    throw new RangeError('timeout must be a non-negative finite number')
+  }
+
+  const startedAt = Date.now()
+  const group = createAbortGroup(options.signal)
+  const timer = timeoutDuration === undefined ? undefined : setTimeout(() => group.abort(new Error('Polling timed out')), timeoutDuration)
+
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      const context: PollContext = { attempt, elapsed: Math.max(0, Date.now() - startedAt), signal: group.signal }
+      const value = await raceWithSignal(Promise.resolve(fn(context)), group.signal)
+
+      if (await raceWithSignal(Promise.resolve(options.until(value, context)), group.signal)) return value
+      if (maxAttempts !== undefined && attempt >= maxAttempts) throw new Error('Polling reached max attempts')
+
+      const interval = typeof options.interval === 'function' ? options.interval({ ...context, value }) : (options.interval ?? 0)
+      if (!Number.isFinite(interval) || interval < 0) throw new RangeError('poll interval must be a non-negative finite number')
+      if (interval > 0) await sleep(interval, group.signal)
+    }
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export function debounce<T extends AnyFunction>(fn: T, wait = 0, options: DebounceOptions = {}): DebouncedFunction<T> {
@@ -284,6 +481,23 @@ export async function promisePool<T, TResult>(
   await Promise.all(Array.from({ length: Math.min(items.length, concurrency) }, runWorker))
 
   return results
+}
+
+export function mapAsync<T, TResult>(
+  items: readonly T[],
+  mapper: (item: T, index: number, signal?: AbortSignal) => Awaitable<TResult>,
+  options: AsyncCollectionOptions = {}
+) {
+  return promisePool(items, async (item, index, signal) => await mapper(item, index, signal), options.concurrency, options)
+}
+
+export async function filterAsync<T>(
+  items: readonly T[],
+  predicate: (item: T, index: number, signal?: AbortSignal) => Awaitable<boolean>,
+  options: AsyncCollectionOptions = {}
+) {
+  const matches = await mapAsync(items, predicate, options)
+  return items.filter((_, index) => matches[index])
 }
 
 function defaultMemoizeResolver(args: readonly unknown[]) {

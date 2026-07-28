@@ -1,4 +1,5 @@
 export type AnyFunction = (...args: never[]) => unknown
+export type RandomSource = () => number
 
 const objectToString = Object.prototype.toString
 

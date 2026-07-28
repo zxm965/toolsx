@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { Cookie, EventEmitter, StorageWithExpiration, createMemoryStorage, isStorageAvailable, parseCookieHeader, serializeCookie } from '../shared'
+import {
+  AsyncStorageWithExpiration,
+  Cookie,
+  EventEmitter,
+  StorageWithExpiration,
+  createAsyncStorageAdapter,
+  createMemoryStorage,
+  isStorageAvailable,
+  parseCookieHeader,
+  serializeCookie
+} from '../shared'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -55,6 +65,12 @@ describe('Cookie', () => {
     expect(() => cookie.setJSON('invalid', undefined)).toThrow('not serializable')
     expect(parseCookieHeader('broken; good=value%20x; bad=%E0%A4%A')).toEqual({ good: 'value x', bad: '%E0%A4%A' })
   })
+
+  it('serializes server and partitioning attributes', () => {
+    expect(serializeCookie('session', 'value', { httpOnly: true, partitioned: true, priority: 'High', secure: true })).toContain(
+      'Secure; HttpOnly; Partitioned; Priority=High'
+    )
+  })
 })
 
 describe('StorageWithExpiration', () => {
@@ -74,9 +90,23 @@ describe('StorageWithExpiration', () => {
     vi.advanceTimersByTime(1_001)
     expect(storage.getItem<{ id: number }>('user-profile')).toMatchObject({ expired: true, found: true, value: { id: 1 } })
     expect(storage.getOrSet('user-profile', () => ({ id: 2 }))).toEqual({ id: 2 })
+    expect(storage.entries()).toEqual([['user-profile', { id: 2 }]])
+    expect(storage.values()).toEqual([{ id: 2 }])
+    expect(storage.updateItem<{ id: number }>('user-profile', (value) => ({ id: value.id + 1 }))).toEqual({ id: 3 })
     storage.removeItem('user-profile')
     expect(changes).toContain('set:user-profile')
     expect(changes).toContain('remove:user-profile')
+  })
+
+  it('purges expired entries in bulk', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const storage = new StorageWithExpiration(createMemoryStorage(), { validateKey: false })
+    storage.setItem('expired', 1, { ttl: 10 })
+    storage.setItem('active', 2, { ttl: 100 })
+    vi.setSystemTime(1_011)
+    expect(storage.purgeExpired()).toBe(1)
+    expect(storage.keys()).toEqual(['active'])
   })
 
   it('migrates versions and refreshes sliding expiration', () => {
@@ -149,6 +179,66 @@ describe('StorageWithExpiration', () => {
   })
 })
 
+describe('AsyncStorageWithExpiration', () => {
+  it('supports asynchronous adapters, deduplicated factories and collection helpers', async () => {
+    const storage = new AsyncStorageWithExpiration(createAsyncStorageAdapter(createMemoryStorage()), {
+      namespace: 'async',
+      validateKey: false
+    })
+    const factory = vi.fn(async () => ({ count: 1 }))
+    const [first, second] = await Promise.all([storage.getOrSet('item', factory, { ttl: 1_000 }), storage.getOrSet('item', factory, { ttl: 1_000 })])
+
+    expect(first).toEqual({ count: 1 })
+    expect(second).toEqual({ count: 1 })
+    expect(factory).toHaveBeenCalledOnce()
+    expect(await storage.entries()).toEqual([['item', { count: 1 }]])
+    expect(await storage.values()).toEqual([{ count: 1 }])
+    await expect(storage.updateItem<{ count: number }>('item', async (value) => ({ count: value.count + 1 }))).resolves.toEqual({ count: 2 })
+    expect(await storage.getValue<{ count: number }>('item')).toEqual({ count: 2 })
+    await storage.clear()
+    expect(await storage.keys()).toEqual([])
+  })
+
+  it('migrates and purges expired entries', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const raw = createMemoryStorage()
+    raw.setItem('value', JSON.stringify({ expiresAt: 1_010, updatedAt: 1_000, value: 1, version: 1 }))
+    const storage = new AsyncStorageWithExpiration(createAsyncStorageAdapter(raw), {
+      migrate: async (value) => Number(value) + 1,
+      validateKey: false,
+      version: 2
+    })
+
+    expect(await storage.getValue<number>('value')).toBe(2)
+    vi.setSystemTime(1_011)
+    expect(await storage.purgeExpired()).toBe(1)
+  })
+
+  it('handles adapter limitations, validation and parse failures', async () => {
+    const values = new Map<string, string>([['bad', 'not-json']])
+    const parseError = vi.fn()
+    const storage = new AsyncStorageWithExpiration(
+      {
+        getItem: (key) => values.get(key) ?? null,
+        removeItem: (key) => {
+          values.delete(key)
+        },
+        setItem: (key, value) => {
+          values.set(key, value)
+        }
+      },
+      { onParseError: parseError }
+    )
+
+    expect((await storage.getItem('bad')).found).toBe(false)
+    expect(parseError).toHaveBeenCalledOnce()
+    await expect(storage.keys()).rejects.toThrow('key enumeration')
+    await expect(storage.setItem('bad-key', 1)).rejects.toThrow('Invalid key format')
+    await expect(storage.setItem('valid_key', 1, { ttl: -1 })).rejects.toThrow(RangeError)
+  })
+})
+
 describe('EventEmitter', () => {
   type Events = {
     'user:login': { id: string }
@@ -215,6 +305,54 @@ describe('EventEmitter', () => {
     expect(await emitter.safeEmitAsync('logout')).toHaveLength(1)
     emitter.clear()
     expect(emitter.totalListenerCount()).toBe(0)
+  })
+
+  it('waits for events, emits in parallel and exposes listener state', async () => {
+    const emitter = new EventEmitter<Events>()
+    const calls: string[] = []
+    let releaseFirst!: () => void
+    let releaseSecond!: () => void
+    emitter.on('user:login', async () => {
+      calls.push('first:start')
+      await new Promise<void>((resolve) => (releaseFirst = resolve))
+      calls.push('first:end')
+    })
+    emitter.on('user:login', async () => {
+      calls.push('second:start')
+      await new Promise<void>((resolve) => (releaseSecond = resolve))
+      calls.push('second:end')
+    })
+
+    expect(emitter.hasListeners('user:login')).toBe(true)
+    expect(emitter.eventNames()).toEqual(['user:login'])
+    const waiting = emitter.waitFor('logout', { timeout: 100 })
+    emitter.emit('logout')
+    await expect(waiting).resolves.toBeUndefined()
+
+    const emitted = emitter.emitParallel('user:login', { id: '1' })
+    await Promise.resolve()
+    expect(calls).toEqual(['first:start', 'second:start'])
+    releaseSecond()
+    releaseFirst()
+    await emitted
+    expect(calls).toEqual(['first:start', 'second:start', 'second:end', 'first:end'])
+    expect(emitter.hasListeners()).toBe(true)
+  })
+
+  it('cancels and times out event waits', async () => {
+    const emitter = new EventEmitter<Events>()
+    const controller = new AbortController()
+    const aborted = emitter.waitFor('logout', { signal: controller.signal })
+    controller.abort(new Error('cancel wait'))
+    await expect(aborted).rejects.toThrow('cancel wait')
+
+    vi.useFakeTimers()
+    const timed = emitter.waitFor('logout', { timeout: 10 })
+    const expectation = expect(timed).rejects.toThrow('Timed out waiting')
+    await vi.advanceTimersByTimeAsync(10)
+    await expectation
+    await expect(emitter.waitFor('logout', { timeout: -1 })).rejects.toThrow(RangeError)
+    expect(emitter.hasListeners()).toBe(false)
   })
 
   it('reports listener limit overflow', () => {

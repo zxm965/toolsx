@@ -1,4 +1,5 @@
 import { isNil } from './type'
+import type { RandomSource } from './type'
 
 export type Falsy = false | 0 | 0n | '' | null | undefined
 export type NestedArray<T> = readonly (T | NestedArray<T>)[]
@@ -13,6 +14,17 @@ export function toArray<T>(value: T | T[] | null | undefined) {
 
 export function unique<T>(array: readonly T[]) {
   return Array.from(new Set(array))
+}
+
+export function uniqueBy<T, TKey>(array: readonly T[], getKey: (item: T, index: number) => TKey) {
+  const seen = new Set<TKey>()
+
+  return array.filter((item, index) => {
+    const key = getKey(item, index)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export function compact<T>(array: readonly T[]) {
@@ -81,8 +93,72 @@ export function chunk<T>(array: readonly T[], size: number) {
   return result
 }
 
+export function first<T>(array: readonly T[]) {
+  return array[0]
+}
+
 export function last<T>(array: readonly T[]) {
   return array.length ? array[array.length - 1] : undefined
+}
+
+function normalizeCount(count: number) {
+  return Math.max(0, Math.trunc(count))
+}
+
+export function take<T>(array: readonly T[], count = 1) {
+  return array.slice(0, normalizeCount(count))
+}
+
+export function drop<T>(array: readonly T[], count = 1) {
+  return array.slice(normalizeCount(count))
+}
+
+export function takeRight<T>(array: readonly T[], count = 1) {
+  const size = normalizeCount(count)
+  return size === 0 ? [] : array.slice(-size)
+}
+
+export function dropRight<T>(array: readonly T[], count = 1) {
+  const size = normalizeCount(count)
+  return size === 0 ? [...array] : array.slice(0, Math.max(0, array.length - size))
+}
+
+export function range(end: number): number[]
+export function range(start: number, end: number, step?: number): number[]
+export function range(startOrEnd: number, end?: number, step?: number) {
+  const start = end === undefined ? 0 : startOrEnd
+  const limit = end === undefined ? startOrEnd : end
+  const increment = step ?? (limit >= start ? 1 : -1)
+
+  if (![start, limit, increment].every(Number.isFinite)) {
+    throw new RangeError('range values must be finite numbers')
+  }
+
+  if (increment === 0) {
+    throw new RangeError('step must not be 0')
+  }
+
+  if ((limit > start && increment < 0) || (limit < start && increment > 0)) {
+    return []
+  }
+
+  const result: number[] = []
+
+  if (increment > 0) {
+    for (let value = start; value < limit; value += increment) result.push(value)
+  } else {
+    for (let value = start; value > limit; value += increment) result.push(value)
+  }
+
+  return result
+}
+
+export function zip<TArrays extends readonly (readonly unknown[])[]>(...arrays: TArrays) {
+  const length = Math.max(0, ...arrays.map((array) => array.length))
+
+  return Array.from({ length }, (_, index) => arrays.map((array) => array[index])) as Array<{
+    [K in keyof TArrays]: TArrays[K] extends readonly (infer TItem)[] ? TItem | undefined : never
+  }>
 }
 
 export function groupBy<T, K extends PropertyKey>(array: readonly T[], getKey: (item: T, index: number) => K) {
@@ -123,7 +199,7 @@ export function sortBy<T>(array: readonly T[], getValue: (item: T) => string | n
   })
 }
 
-export function shuffle<T>(array: readonly T[], random: () => number = Math.random) {
+export function shuffle<T>(array: readonly T[], random: RandomSource = Math.random) {
   const result = [...array]
 
   for (let index = result.length - 1; index > 0; index -= 1) {
@@ -134,7 +210,7 @@ export function shuffle<T>(array: readonly T[], random: () => number = Math.rand
   return result
 }
 
-export function sample<T>(array: readonly T[], random: () => number = Math.random) {
+export function sample<T>(array: readonly T[], random: RandomSource = Math.random) {
   if (!array.length) {
     return undefined
   }

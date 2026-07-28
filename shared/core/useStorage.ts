@@ -368,6 +368,43 @@ class StorageWithExpiration {
     return [...storageKeys].filter((key) => this.isOwnedStorageKey(key)).map((key) => this.toLogicalKey(key))
   }
 
+  entries<T = unknown>() {
+    const result: [string, T][] = []
+
+    for (const key of this.keys()) {
+      const item = this.getItem<T>(key)
+      if (item.found && !item.expired) result.push([key, item.value])
+    }
+
+    return result
+  }
+
+  values<T = unknown>() {
+    return this.entries<T>().map(([, value]) => value)
+  }
+
+  updateItem<T>(key: string, updater: (value: T) => T, options: StorageSetOptions = {}) {
+    const current = this.getItem<T>(key)
+    if (!current.found || current.expired) return null
+
+    const value = updater(current.value)
+    const nextOptions =
+      options.expiresAt === undefined && options.slidingExpiration === undefined && options.ttl === undefined ? { expiresAt: current.expiresAt } : options
+    this.setItem(key, value, nextOptions)
+    return value
+  }
+
+  purgeExpired() {
+    let removed = 0
+
+    for (const key of this.keys()) {
+      const item = this.getItem(key)
+      if (item.found && item.expired) removed += 1
+    }
+
+    return removed
+  }
+
   removeItem(key: string): void {
     this.validateKey(key)
     this.removeRaw(this.toStorageKey(key))

@@ -90,13 +90,21 @@ isFiniteNumber(Number.NaN) // false
 | ---------------------------------------- | ----------------------------------------------------- |
 | `toArray(value)`                         | nil 返回 `[]`；数组原样返回；单值包装为数组。         |
 | `unique(array)`                          | 基于 `Set` 去重，并保留第一次出现的顺序。             |
+| `uniqueBy(array, getKey)`                | 根据计算得到的 key 去重，并保留第一次出现的顺序。     |
 | `compact(array)`                         | 移除 JavaScript 假值。                                |
 | `flatten(array, depth = Infinity)`       | 将嵌套数组递归展开到指定深度。                        |
 | `intersection(...arrays)`                | 返回存在于所有输入数组中的唯一值。                    |
 | `difference(array, values)`              | 返回不在 `values` 中的值。                            |
 | `partition(array, predicate)`            | 返回 `[匹配项, 未匹配项]`，支持类型守卫 predicate。   |
 | `chunk(array, size)`                     | 按大小拆分数组；`size <= 0` 时返回 `[]`。             |
+| `first(array)`                           | 返回第一项；空数组返回 `undefined`。                  |
 | `last(array)`                            | 返回最后一项；空数组返回 `undefined`。                |
+| `take(array, count = 1)`                 | 返回前 `count` 项。                                   |
+| `drop(array, count = 1)`                 | 排除前 `count` 项。                                   |
+| `takeRight(array, count = 1)`            | 返回后 `count` 项。                                   |
+| `dropRight(array, count = 1)`            | 排除后 `count` 项。                                   |
+| `range(start?, end, step?)`              | 生成不包含终点的数字序列；支持 `range(end)`。         |
+| `zip(...arrays)`                         | 按索引组合数组，较短数组的缺失位置使用 `undefined`。  |
 | `groupBy(array, getKey)`                 | 分组为 `Record<Key, Item[]>`。                        |
 | `keyBy(array, getKey)`                   | 索引为 `Record<Key, Item>`；重复 key 使用后一项覆盖。 |
 | `sortBy(array, getValue, order = 'asc')` | 根据字符串、数字或 Date key 返回排序后的新数组。      |
@@ -119,6 +127,8 @@ const usersById = keyBy(users, (user) => user.id)
 | ---------------------------------- | ------------------------------------------------------------------------------ |
 | `pick(object, keys)`               | 创建只包含指定字段的对象。                                                     |
 | `omit(object, keys)`               | 创建排除指定字段的浅拷贝。                                                     |
+| `defaults(object, values)`         | 仅使用默认值补充值为 `undefined` 的字段。                                      |
+| `compactObject(object)`            | 创建移除值为 `undefined` 的浅拷贝。                                            |
 | `deepMerge(target, source)`        | 递归合并普通对象，非普通对象值直接替换。                                       |
 | `get(object, path, defaultValue?)` | 使用点路径或 `PropertyKey[]` 路径读取值。                                      |
 | `has(object, path)`                | 判断路径是否存在，即使路径值为 `undefined` 也能正确判断。                      |
@@ -126,6 +136,8 @@ const usersById = keyBy(users, (user) => user.id)
 | `unset(object, path)`              | 删除路径，返回 `Reflect.deleteProperty` 的结果。                               |
 | `mapValues(object, transform)`     | 保留 key，对每个自有属性的值进行转换。                                         |
 | `mapKeys(object, transform)`       | 保留值，对每个自有属性的 key 进行转换。                                        |
+| `invert(object)`                   | 交换对象的 key 与值；重复值由后出现的 key 覆盖。                               |
+| `deepFreeze(value)`                | 递归冻结对象属性，并返回深只读类型。                                           |
 | `deepEqual(left, right)`           | 深比较对象、数组、Date、RegExp、Map、Set、TypedArray 视图、Symbol 与循环引用。 |
 | `clone(value)`                     | 优先使用 `structuredClone`，不可用时降级为 JSON 克隆。                         |
 
@@ -144,10 +156,13 @@ unset(settings, 'theme.size')
 
 ## 数字工具
 
-| API                      | 行为                                   |
-| ------------------------ | -------------------------------------- |
-| `clamp(value, min, max)` | 把数字限制在包含边界的区间内。         |
-| `randomInt(min, max)`    | 在取整后的包含边界区间中生成随机整数。 |
+| API                             | 行为                                                 |
+| ------------------------------- | ---------------------------------------------------- |
+| `clamp(value, min, max)`        | 把数字限制在包含边界的区间内。                       |
+| `randomInt(min, max, random?)`  | 在取整后的包含边界区间中生成随机整数，可注入随机源。 |
+| `sum(values)`                   | 计算数字数组总和；空数组返回 `0`。                   |
+| `average(values)`               | 计算数字数组平均值；空数组返回 `NaN`。               |
+| `roundTo(value, precision = 0)` | 按指定十进制精度四舍五入。                           |
 
 ## 字符串工具
 
@@ -161,6 +176,7 @@ unset(settings, 'theme.size')
 | `trim(value, chars?)`                                                | 移除两端空白或指定字符集合。                   |
 | `truncate(value, length, omission = '…')`                            | 按 Unicode code point 截断并追加省略标记。     |
 | `escapeHtml(value)`                                                  | 转义 `&`、`<`、`>`、`"`、`'`。                 |
+| `escapeRegExp(value)`                                                | 转义正则表达式特殊字符。                       |
 | `mask(value, visibleStart = 0, visibleEnd = 4, maskCharacter = '*')` | 遮罩中间的 Unicode 字符。                      |
 | `randomString(length, alphabet?, random?)`                           | 生成随机字符串，默认字符集为大小写字母和数字。 |
 
@@ -175,22 +191,34 @@ escapeHtml('<script>') // &lt;script&gt;
 
 ## JSON 工具
 
-| API                                       | 行为                                     |
-| ----------------------------------------- | ---------------------------------------- |
-| `safeJsonParse(value, fallback?)`         | JSON 解析失败时返回 fallback，不抛异常。 |
-| `safeJsonStringify(value, fallback = '')` | JSON 序列化抛错时返回 fallback。         |
+| API                                       | 行为                                        |
+| ----------------------------------------- | ------------------------------------------- |
+| `safeJsonParse(value, fallback?)`         | JSON 解析失败时返回 fallback，不抛异常。    |
+| `safeJsonStringify(value, fallback = '')` | JSON 序列化抛错时返回 fallback。            |
+| `stableJsonStringify(value)`              | 按稳定对象 key 顺序序列化；循环引用会抛错。 |
 
 ## 异步与函数工具
 
 | API                                                 | 行为                                                |
 | --------------------------------------------------- | --------------------------------------------------- |
 | `noop()`                                            | 空函数，可作为默认回调。                            |
+| `identity(value)`                                   | 原样返回输入值。                                    |
+| `constant(value)`                                   | 创建始终返回指定值的函数。                          |
+| `once(fn)`                                          | 创建最多执行一次并缓存结果或同步错误的函数。        |
+| `pipe(...functions)`                                | 从左到右组合一元函数。                              |
+| `compose(...functions)`                             | 从右到左组合一元函数。                              |
 | `sleep(ms, signal?)`                                | 至少等待指定毫秒；Signal 中断时 reject。            |
 | `tryCatch(promise)`                                 | 将 Promise 转成 `[data, null]` 或 `[null, error]`。 |
 | `retry(fn, options?)`                               | 支持延时、退避、抖动、过滤与取消的异步重试。        |
 | `retry(fn, times, delay)`                           | 兼容调用；`times` 表示总尝试次数。                  |
 | `timeout(promise, ms, message?)`                    | 超时后 reject，但不会取消原 Promise。               |
 | `withResolvers<T>()`                                | 返回 `{ promise, resolve, reject }`。               |
+| `raceWithSignal(promise, signal?)`                  | 让 Promise 响应外部 Signal，但不取消底层操作。      |
+| `createAbortGroup(...signals)`                      | 创建可追加外部 Signal 的共享取消组。                |
+| `createLimiter(concurrency)`                        | 创建可复用的并发限制器。                            |
+| `poll(fn, options)`                                 | 按条件轮询，支持间隔、次数、超时与取消。            |
+| `mapAsync(items, mapper, options?)`                 | 有限并发异步映射并保持顺序。                        |
+| `filterAsync(items, predicate, options?)`           | 有限并发异步过滤并保持顺序。                        |
 | `debounce(fn, wait, options?)`                      | 创建带控制方法的防抖函数。                          |
 | `throttle(fn, wait, options?)`                      | 创建带控制方法的节流函数。                          |
 | `promisePool(items, worker, concurrency, options?)` | 以有限并发处理任务并保持结果顺序。                  |
@@ -199,15 +227,16 @@ escapeHtml('<script>') // &lt;script&gt;
 
 ### retry 配置
 
-| 配置          | 默认值         | 说明                                 |
-| ------------- | -------------- | ------------------------------------ |
-| `retries`     | `2`            | 第一次尝试后的重试次数。             |
-| `delay`       | `0`            | 基础延时，或接收错误与上下文的函数。 |
-| `factor`      | `1`            | 数字延时的指数倍率。                 |
-| `maxDelay`    | `Infinity`     | 最大计算延时。                       |
-| `jitter`      | `false`        | 随机化延时，或通过自定义函数计算。   |
-| `shouldRetry` | 重试至次数耗尽 | 支持异步的重试判断。                 |
-| `signal`      | —              | 取消等待和后续尝试。                 |
+| 配置          | 默认值         | 说明                                  |
+| ------------- | -------------- | ------------------------------------- |
+| `retries`     | `2`            | 第一次尝试后的重试次数。              |
+| `delay`       | `0`            | 基础延时，或接收错误与上下文的函数。  |
+| `factor`      | `1`            | 数字延时的指数倍率。                  |
+| `maxDelay`    | `Infinity`     | 最大计算延时。                        |
+| `jitter`      | `false`        | 随机化延时，或通过自定义函数计算。    |
+| `random`      | `Math.random`  | `jitter: true` 时使用的可注入随机源。 |
+| `shouldRetry` | 重试至次数耗尽 | 支持异步的重试判断。                  |
+| `signal`      | —              | 取消等待和后续尝试。                  |
 
 ```ts
 import { retry } from 'toolsx/utils'
@@ -244,6 +273,25 @@ const users = await promisePool(ids, (id, index, signal) => loadUser(id, { index
 
 结果顺序与输入顺序一致。任意 worker 失败或 Signal 中断时任务池 reject；已经执行中的任务只有在 worker 使用传入 Signal 时才会主动停止。
 
+### 并发限制、轮询与取消组
+
+```ts
+import { createAbortGroup, createLimiter, poll } from 'toolsx/utils'
+
+const group = createAbortGroup(externalSignal)
+const limit = createLimiter(3)
+
+const values = await Promise.all(tasks.map((task) => limit(task, group.signal)))
+const ready = await poll(checkReady, {
+  interval: 200,
+  maxAttempts: 10,
+  signal: group.signal,
+  until: (value) => value === true
+})
+```
+
+`createLimiter` 返回的函数提供只读 `activeCount`、`pendingCount` 和 `clearQueue(reason?)`。取消排队任务不会自动停止已经运行且忽略 Signal 的任务。
+
 ### 函数缓存
 
 ```ts
@@ -267,7 +315,7 @@ formatUser.clear()
 
 ## 导出的工具类型
 
-`toolsx/utils` 同时导出 `AnyFunction`、`Falsy`、`NestedArray`、`DebounceOptions`、`ThrottleOptions`、`ControlledFunction`、`DebouncedFunction`、`ThrottledFunction`、`RetryContext`、`RetryOptions`、`PromisePoolOptions`、`MemoizedFunction`、`MemoizeOptions`、`MemoizeAsyncOptions`、`MemoizeAsyncCacheEntry`、`MemoizedAsyncFunction`。
+`toolsx/utils` 同时导出 `AnyFunction`、`RandomSource`、`Unary`、`Falsy`、`NestedArray`、`CompactObject`、`DeepReadonly`、`OnceFunction`、`Awaitable`、`AbortGroup`、`ConcurrencyLimiter`、`AsyncCollectionOptions`、`PollContext`、`PollOptions`、`DebounceOptions`、`ThrottleOptions`、`ControlledFunction`、`DebouncedFunction`、`ThrottledFunction`、`RetryContext`、`RetryOptions`、`PromisePoolOptions`、`MemoizedFunction`、`MemoizeOptions`、`MemoizeAsyncOptions`、`MemoizeAsyncCacheEntry`、`MemoizedAsyncFunction`。
 
 # 请求客户端
 
@@ -328,7 +376,7 @@ type RequestResult<T> =
 | `timestamp` | 请求开始的毫秒时间戳。           |
 | `duration`  | 调用方观察到的总耗时。           |
 | `attempts`  | 网络尝试次数；缓存命中时为 `0`。 |
-| `fromCache` | 是否命中内存响应缓存。           |
+| `fromCache` | 是否命中响应缓存。               |
 | `deduped`   | 是否加入了已存在的在途请求。     |
 
 需要异常式流程时使用 `unwrapRequestResult`。
@@ -361,7 +409,7 @@ type RequestResult<T> =
 | `refreshToken`       | 刷新失效 Token；并发刷新共享同一个 Promise。                                |
 | `shouldRefreshToken` | 自定义刷新判断，支持异步；默认判断状态码 `401`。                            |
 | `retryPolicy`        | 重试配置或 `false`。                                                        |
-| `responseCache`      | 内存响应缓存配置或 `false`。                                                |
+| `responseCache`      | 响应缓存配置或 `false`，支持自定义同步缓存适配器。                          |
 | `dedupe`             | 是否启用安全方法的在途去重。                                                |
 | `concurrency`        | 最大并发网络执行数，必须大于 0。                                            |
 | `middlewares`        | 初始中间件列表。                                                            |
@@ -458,6 +506,7 @@ const result = await request.get<ApiEnvelope<User>, 'json', User>('/profile', {
 | `factor`      | 数字延时的指数倍率。                                 |
 | `maxDelay`    | 最大延时。                                           |
 | `jitter`      | 布尔随机抖动或自定义函数。                           |
+| `random`      | `jitter: true` 时使用的可注入随机源。                |
 | `methods`     | 允许重试的 HTTP 方法。                               |
 | `statusCodes` | 允许重试的失败状态码；无状态码的网络错误可参与重试。 |
 | `shouldRetry` | 支持异步的最终判断。                                 |
@@ -467,17 +516,18 @@ const result = await request.get<ApiEnvelope<User>, 'json', User>('/profile', {
 
 ## 在途去重与缓存
 
-在途去重会让相同 key 的 GET/HEAD 调用共享正在执行的 Promise。缓存需要显式开启，只缓存成功且已经 transform 的结果，并保存在当前 request 实例内存中。
+在途去重会让相同 key 的 GET/HEAD 调用共享正在执行的 Promise。缓存需要显式开启，只缓存成功且已经 transform 的结果。默认使用当前 request 实例内存，也可以配置自定义同步缓存适配器。
 
 默认 key 包含 method、baseURL、URL、query、body 和鉴权 Token 的哈希。业务需要自定义身份时使用 `cacheKey` 或 `dedupeKey`。
 
 `ResponseCacheOptions`：
 
-| 配置                   | 默认值    | 说明                                   |
-| ---------------------- | --------- | -------------------------------------- |
-| `ttl`                  | `30_000`  | 缓存有效毫秒数。                       |
-| `methods`              | `['GET']` | 可缓存的方法。                         |
-| `invalidateOnMutation` | `true`    | POST/PUT/PATCH/DELETE 成功后清空缓存。 |
+| 配置                   | 默认值     | 说明                                    |
+| ---------------------- | ---------- | --------------------------------------- |
+| `ttl`                  | `30_000`   | 缓存有效毫秒数。                        |
+| `methods`              | `['GET']`  | 可缓存的方法。                          |
+| `invalidateOnMutation` | `true`     | POST/PUT/PATCH/DELETE 成功后清空缓存。  |
+| `adapter`              | 内存适配器 | 实现 `RequestCacheAdapter` 的同步缓存。 |
 
 缓存控制器：
 
@@ -488,7 +538,14 @@ const result = await request.get<ApiEnvelope<User>, 'json', User>('/profile', {
 - `request.cache.size`
 - `await request.invalidateCache(url, options)`
 
-该缓存是应用内存缓存，不是浏览器 HTTP Cache，也不会跨进程或 request 实例共享。
+```ts
+import { createMemoryRequestCache, createRequestClient } from 'toolsx/shared'
+
+const cache = createMemoryRequestCache()
+const request = createRequestClient({ responseCache: { adapter: cache, ttl: 30_000 } })
+```
+
+默认缓存不是浏览器 HTTP Cache，也不会跨进程或 request 实例共享。自定义适配器必须同步实现 `get`、`set`、`delete`、`clear`、`has`、`keys` 和 `size`；`request.cache` 控制客户端配置的主适配器。
 
 ## 中间件
 
@@ -538,7 +595,8 @@ const result = await upload.promise
 | `appendQuery(url, params)`                | 在 URL hash 前追加 query。                     |
 | `mergeSignals(...signals)`                | 任意输入中断时中断的合并 Signal。              |
 | `createTimeoutSignal(timeout, reason?)`   | 创建超时 Signal；非正数返回 `undefined`。      |
-| `createRequestId(prefix?)`                | 创建带时间与随机部分的请求 ID。                |
+| `createRequestId(prefix?, random?)`       | 创建带时间与随机部分的请求 ID，可注入随机源。  |
+| `createMemoryRequestCache(entries?)`      | 创建符合 `RequestCacheAdapter` 的内存缓存。    |
 | `isRequestSuccess(result)`                | 成功结果类型守卫。                             |
 | `isRequestFailure(result)`                | 失败结果类型守卫。                             |
 | `mapRequestResult(result, transform)`     | 只转换成功 response。                          |
@@ -548,7 +606,7 @@ const result = await upload.promise
 
 ## 导出的 Request 类型
 
-request 入口同时导出 `FetchOptions`、`FetchRequest`、`FetchResponse`、`MappedResponseType`、`ResponseType`、`RequestMethod`、`TokenValue`、`TokenGetter`、`RequestProgressPhase`、`RequestProgress`、`RequestProgressHandler`、`RequestRetryContext`、`RequestRetryOptions`、`ResponseCacheOptions`、`RequestOptions`、`RawRequestOptions`、`RequestMeta`、`RequestErrorOptions`、`RequestSuccess`、`RequestFailure`、`RequestResult`、各类 Hook Context、`RequestAuthOptions`、`TokenRefreshContext`、`RequestTrace`、中间件类型、`CreateRequestOptions`、`AbortableRequest`、快捷调用类型、`RequestCacheController`、`RequestInstance`、`QueryValue`、`QueryParams`。
+request 入口同时导出 `FetchOptions`、`FetchRequest`、`FetchResponse`、`MappedResponseType`、`ResponseType`、`RequestMethod`、`TokenValue`、`TokenGetter`、`RequestProgressPhase`、`RequestProgress`、`RequestProgressHandler`、`RequestRetryContext`、`RequestRetryOptions`、`ResponseCacheOptions`、`RequestCacheEntry`、`RequestCacheAdapter`、`RequestOptions`、`RawRequestOptions`、`RequestMeta`、`RequestErrorOptions`、`RequestSuccess`、`RequestFailure`、`RequestResult`、各类 Hook Context、`RequestAuthOptions`、`TokenRefreshContext`、`RequestTrace`、中间件类型、`CreateRequestOptions`、`AbortableRequest`、快捷调用类型、`RequestCacheController`、`RequestInstance`、`QueryValue`、`QueryParams`。
 
 # Cookie
 
@@ -583,15 +641,18 @@ SSR/Node.js 环境没有 `document` 时，`isAvailable()` 返回 `false`，写�
 
 ## Cookie 配置
 
-| 配置        | 说明                                    |
-| ----------- | --------------------------------------- |
-| `expires`   | Date 或绝对毫秒时间戳；非法日期会抛错。 |
-| `maxAge`    | 有效秒数。                              |
-| `path`      | 默认 `/`。                              |
-| `domain`    | Cookie domain。                         |
-| `sameSite`  | `'Strict'`、`'Lax'` 或 `'None'`。       |
-| `secure`    | 添加 `Secure` 属性。                    |
-| `onSuccess` | 适配器写入成功后调用。                  |
+| 配置          | 说明                                     |
+| ------------- | ---------------------------------------- |
+| `expires`     | Date 或绝对毫秒时间戳；非法日期会抛错。  |
+| `maxAge`      | 有效秒数。                               |
+| `path`        | 默认 `/`。                               |
+| `domain`      | Cookie domain。                          |
+| `sameSite`    | `'Strict'`、`'Lax'` 或 `'None'`。        |
+| `secure`      | 添加 `Secure` 属性。                     |
+| `httpOnly`    | 添加 `HttpOnly` 属性，用于服务端序列化。 |
+| `partitioned` | 添加 `Partitioned` 属性。                |
+| `priority`    | 添加 `'Low'`、`'Medium'` 或 `'High'`。   |
+| `onSuccess`   | 适配器写入成功后调用。                   |
 
 ## Cookie 方法
 
@@ -611,7 +672,7 @@ SSR/Node.js 环境没有 `document` 时，`isAvailable()` 返回 `false`，写�
 
 浏览器 JavaScript 无法创建 `HttpOnly` Cookie；敏感 HttpOnly Cookie 必须由服务端设置。
 
-导出的 Cookie 类型：`CookieSameSite`、`CookieOptions`、`CookieAdapter`。
+导出的 Cookie 类型：`CookieSameSite`、`CookiePriority`、`CookieOptions`、`CookieAdapter`。
 
 # 带过期能力的 Storage
 
@@ -684,6 +745,10 @@ const settings = storage.getOrSet('settings', () => ({ theme: 'light' }))
 | `getOrSet(key, createValue, options?)` | 读取有效值，或同步创建并写入新值。                        |
 | `has(key)`                             | 判断是否存在有效且未过期的数据。                          |
 | `keys()`                               | 合并主存储和降级存储的逻辑 key。                          |
+| `entries<T>()`                         | 返回所有有效数据的 `[key, value]`。                       |
+| `values<T>()`                          | 返回所有有效 value。                                      |
+| `updateItem(key, updater, options?)`   | 更新已有有效数据；缺失时返回 `null`。                     |
+| `purgeExpired()`                       | 清理全部过期数据并返回数量。                              |
 | `removeItem(key)`                      | 同时从主存储和降级存储删除。                              |
 | `clear()`                              | 有 namespace 时只清理当前 namespace，否则清空包装的存储。 |
 | `subscribe(listener)`                  | 订阅本地/外部 `set`、`remove`、`clear` 变更。             |
@@ -694,6 +759,28 @@ const settings = storage.getOrSet('settings', () => ({ theme: 'light' }))
 `StorageChange` 包含 `type`、可选 `key`/`value`，以及 `source: 'local' | 'external'`。
 
 导出的 Storage 类型：`StorageExpiration`、`StorageParseErrorStrategy`、`StorageChangeType`、`StorageMigrationContext`、`StorageSyncOptions`、`StorageWithExpirationOptions`、`StorageItem`、`StorageSetOptions`、`StorageGetResult`、`StorageChange`。
+
+## 异步 Storage 适配器
+
+`AsyncStorageWithExpiration` 面向 IndexedDB、远程 KV 或其他 Promise 存储。它不会改变同步 `StorageWithExpiration` 的方法签名。
+
+```ts
+import { AsyncStorageWithExpiration, createAsyncStorageAdapter } from 'toolsx/shared'
+
+const storage = new AsyncStorageWithExpiration(createAsyncStorageAdapter(localStorage), {
+  namespace: 'app',
+  validateKey: false
+})
+
+const value = await storage.getOrSet('settings', async () => loadDefaults(), { ttl: 60_000 })
+await storage.updateItem('settings', async (current) => ({ ...current, ready: true }))
+```
+
+`AsyncStorageAdapter` 必须实现异步兼容的 `getItem`、`setItem`、`removeItem`；`keys` 与 `clear` 可选。命名空间清理、遍历和过期批量清理需要适配器提供 `keys()`。`createAsyncStorageAdapter(storage)` 可把同步 Web Storage 转成异步适配器。
+
+异步实例提供 `setItem`、`getItem`、`getValue`、`getOrSet`、`has`、`keys`、`entries`、`values`、`updateItem`、`purgeExpired`、`removeItem` 和 `clear`。并发调用相同 key 的 `getOrSet` 会共享创建 Promise。
+
+导出的异步 Storage 类型：`AsyncStorageValue`、`AsyncStorageAdapter`、`AsyncStorageWithExpirationOptions`。
 
 # 类型安全 EventEmitter
 
@@ -744,16 +831,20 @@ unsubscribe()
 | `emit(eventName, payload?)`              | 同步调用，不等待 Promise；同步错误向外抛出。        |
 | `safeEmit(eventName, payload?)`          | 收集同步错误并继续执行。                            |
 | `emitAsync(eventName, payload?)`         | 按顺序等待监听器；错误导致 reject。                 |
+| `emitParallel(eventName, payload?)`      | 并行启动并等待监听器；任一错误导致 reject。         |
 | `safeEmitAsync(eventName, payload?)`     | 按顺序等待并收集全部错误。                          |
+| `waitFor(eventName, options?)`           | 等待下一次精确事件，支持超时和 Signal。             |
 | `clear(eventName?)`                      | 清空一个精确事件，或清空全部精确/Pattern/Any 监听。 |
 | `listenerCount(eventName)`               | 返回某个精确事件监听数量。                          |
+| `eventNames()`                           | 返回当前存在精确监听器的事件名。                    |
+| `hasListeners(eventName?)`               | 判断指定精确事件或整个 emitter 是否存在监听器。     |
 | `totalListenerCount()`                   | 返回精确、Pattern、Any 监听总数。                   |
 | `setMaxListeners(value)`                 | 更新阈值并返回 emitter。                            |
 | `createListenerHelper<TEvents>()`        | 单独声明监听函数时保留 payload 类型。               |
 
 Promise 监听器应使用 `emitAsync`/`safeEmitAsync`；`safeEmit` 只提供即时同步错误收集。
 
-导出的 EventEmitter 类型：`EventListener`、`Unsubscribe`、`EventListenerOptions`、`EventEmitterOptions`、`EventAnyPayload`、`EventAnyListener`。
+导出的 EventEmitter 类型：`EventListener`、`Unsubscribe`、`EventListenerOptions`、`EventWaitOptions`、`EventEmitterOptions`、`EventAnyPayload`、`EventAnyListener`。
 
 # 框架示例
 
@@ -766,7 +857,7 @@ Promise 监听器应使用 `emitAsync`/`safeEmitAsync`；`safeEmit` 只提供即
 - `structuredClone` 不可用时，`clone` 会降级为 JSON 克隆，此时无法保留 JSON 不支持的值、函数与循环引用。
 - Cookie 与 Storage 工具不提供数据加密，客户端存储不能作为安全凭证保险箱。
 - 浏览器敏感凭证应优先使用服务端设置的 `HttpOnly`、`Secure` 与合适的 `SameSite` Cookie。
-- Request 响应缓存是当前实例的内存缓存，不是持久化缓存或标准 HTTP Cache。
+- Request 默认使用实例内存缓存；自定义适配器的持久性由适配器实现决定，且都不是标准 HTTP Cache。
 - Cookie 和 Web Storage 的可用性与容量取决于浏览器隐私策略和用户设置。
 
 # 许可证

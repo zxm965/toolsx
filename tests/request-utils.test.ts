@@ -34,7 +34,7 @@ describe('request helpers', () => {
   it('serializes query strings and creates signals and ids', () => {
     expect(createQueryString({ active: true, dates: [new Date(0), null], page: 1 })).toBe('active=true&dates=1970-01-01T00%3A00%3A00.000Z&page=1')
     expect(appendQuery('/users?sort=name#top', { page: 2 })).toBe('/users?sort=name&page=2#top')
-    expect(createRequestId('trace')).toMatch(/^trace_/)
+    expect(createRequestId('trace', () => 0)).toMatch(/^trace_[^_]+_00000000$/)
 
     const first = new AbortController()
     const second = new AbortController()

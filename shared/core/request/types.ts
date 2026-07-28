@@ -35,12 +35,14 @@ export interface RequestRetryOptions {
   maxDelay?: number
   methods?: readonly RequestMethod[]
   onRetry?: (context: RequestRetryContext & { delay: number }) => void | Promise<void>
+  random?: () => number
   retries?: number
   shouldRetry?: (context: RequestRetryContext) => boolean | Promise<boolean>
   statusCodes?: readonly number[]
 }
 
 export interface ResponseCacheOptions {
+  adapter?: RequestCacheAdapter
   invalidateOnMutation?: boolean
   methods?: readonly RequestMethod[]
   ttl?: number
@@ -103,6 +105,21 @@ export interface RequestFailure<TError extends RequestError = RequestError> {
 }
 
 export type RequestResult<T, TError extends RequestError = RequestError> = RequestSuccess<T> | RequestFailure<TError>
+
+export interface RequestCacheEntry {
+  expiresAt: number
+  result: RequestResult<unknown>
+}
+
+export interface RequestCacheAdapter {
+  clear: () => void
+  delete: (key: string) => boolean
+  get: (key: string) => RequestCacheEntry | undefined
+  has: (key: string) => boolean
+  keys: () => string[]
+  set: (key: string, entry: RequestCacheEntry) => void
+  readonly size: number
+}
 
 export interface RequestHookContext<R extends ResponseType = ResponseType> {
   options: FetchOptions<R>

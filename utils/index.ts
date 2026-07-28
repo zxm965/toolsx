@@ -1,5 +1,6 @@
 export * from './core/array'
 export * from './core/async'
+export * from './core/function'
 export * from './core/json'
 export * from './core/number'
 export * from './core/object'

@@ -90,13 +90,21 @@ isFiniteNumber(Number.NaN) // false
 | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `toArray(value)`                         | Returns `[]` for nil values, the same array for arrays, or wraps a single value in an array. |
 | `unique(array)`                          | Removes duplicates with `Set`, preserving first-seen order.                                  |
+| `uniqueBy(array, getKey)`                | Deduplicates by a computed key, preserving first-seen order.                                 |
 | `compact(array)`                         | Removes JavaScript-falsy values.                                                             |
 | `flatten(array, depth = Infinity)`       | Recursively flattens nested arrays up to `depth`.                                            |
 | `intersection(...arrays)`                | Returns unique values present in every input array.                                          |
 | `difference(array, values)`              | Returns values that are not present in `values`.                                             |
 | `partition(array, predicate)`            | Returns `[matched, unmatched]` and supports type-guard predicates.                           |
 | `chunk(array, size)`                     | Splits an array into chunks. Returns `[]` when `size <= 0`.                                  |
+| `first(array)`                           | Returns the first item or `undefined`.                                                       |
 | `last(array)`                            | Returns the last item or `undefined`.                                                        |
+| `take(array, count = 1)`                 | Returns the first `count` items.                                                             |
+| `drop(array, count = 1)`                 | Excludes the first `count` items.                                                            |
+| `takeRight(array, count = 1)`            | Returns the last `count` items.                                                              |
+| `dropRight(array, count = 1)`            | Excludes the last `count` items.                                                             |
+| `range(start?, end, step?)`              | Creates an end-exclusive number range; also supports `range(end)`.                           |
+| `zip(...arrays)`                         | Combines arrays by index and fills missing positions with `undefined`.                       |
 | `groupBy(array, getKey)`                 | Groups items into `Record<Key, Item[]>`.                                                     |
 | `keyBy(array, getKey)`                   | Indexes items into `Record<Key, Item>`; later duplicate keys overwrite earlier values.       |
 | `sortBy(array, getValue, order = 'asc')` | Returns a sorted copy using string, number, or `Date` keys.                                  |
@@ -119,6 +127,8 @@ const usersById = keyBy(users, (user) => user.id)
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `pick(object, keys)`               | Creates an object containing the selected keys.                                                                 |
 | `omit(object, keys)`               | Creates a shallow copy without the selected keys.                                                               |
+| `defaults(object, values)`         | Fills only fields whose current value is `undefined`.                                                           |
+| `compactObject(object)`            | Creates a shallow copy without `undefined` values.                                                              |
 | `deepMerge(target, source)`        | Recursively merges plain objects and replaces non-plain values.                                                 |
 | `get(object, path, defaultValue?)` | Reads a dot path or `PropertyKey[]` path.                                                                       |
 | `has(object, path)`                | Checks whether a path exists, including paths whose value is `undefined`.                                       |
@@ -126,6 +136,8 @@ const usersById = keyBy(users, (user) => user.id)
 | `unset(object, path)`              | Deletes a path and returns the `Reflect.deleteProperty` result.                                                 |
 | `mapValues(object, transform)`     | Maps each own key to a new value while preserving keys.                                                         |
 | `mapKeys(object, transform)`       | Maps own keys while preserving values.                                                                          |
+| `invert(object)`                   | Swaps keys and values; later keys overwrite duplicate values.                                                   |
+| `deepFreeze(value)`                | Recursively freezes object properties and returns a deeply readonly type.                                       |
 | `deepEqual(left, right)`           | Deeply compares objects, arrays, dates, regexes, maps, sets, typed-array views, symbols, and cyclic references. |
 | `clone(value)`                     | Uses `structuredClone` when available and falls back to JSON cloning.                                           |
 
@@ -144,10 +156,13 @@ unset(settings, 'theme.size')
 
 ## Number utilities
 
-| API                      | Behavior                                                 |
-| ------------------------ | -------------------------------------------------------- |
-| `clamp(value, min, max)` | Constrains a number to the inclusive range.              |
-| `randomInt(min, max)`    | Returns an integer between the rounded inclusive bounds. |
+| API                             | Behavior                                                        |
+| ------------------------------- | --------------------------------------------------------------- |
+| `clamp(value, min, max)`        | Constrains a number to the inclusive range.                     |
+| `randomInt(min, max, random?)`  | Returns an inclusive random integer with injectable randomness. |
+| `sum(values)`                   | Sums numeric values; an empty array returns `0`.                |
+| `average(values)`               | Calculates the mean; an empty array returns `NaN`.              |
+| `roundTo(value, precision = 0)` | Rounds to a decimal precision.                                  |
 
 ## String utilities
 
@@ -161,6 +176,7 @@ unset(settings, 'theme.size')
 | `trim(value, chars?)`                                                | Trims whitespace or the supplied character set from both ends.    |
 | `truncate(value, length, omission = '…')`                            | Truncates by Unicode code points and appends the omission marker. |
 | `escapeHtml(value)`                                                  | Escapes `&`, `<`, `>`, `"`, and `'`.                              |
+| `escapeRegExp(value)`                                                | Escapes regular-expression metacharacters.                        |
 | `mask(value, visibleStart = 0, visibleEnd = 4, maskCharacter = '*')` | Masks the middle Unicode code points.                             |
 | `randomString(length, alphabet?, random?)`                           | Generates a random string. The default alphabet is alphanumeric.  |
 
@@ -179,18 +195,30 @@ escapeHtml('<script>') // &lt;script&gt;
 | ----------------------------------------- | ------------------------------------------------------------------ |
 | `safeJsonParse(value, fallback?)`         | Returns parsed JSON or the fallback instead of throwing.           |
 | `safeJsonStringify(value, fallback = '')` | Returns serialized JSON or the fallback when serialization throws. |
+| `stableJsonStringify(value)`              | Serializes with stable object-key order; cyclic input throws.      |
 
 ## Async and function utilities
 
 | API                                                 | Behavior                                                                                       |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `noop()`                                            | Empty function for default callbacks.                                                          |
+| `identity(value)`                                   | Returns the input unchanged.                                                                   |
+| `constant(value)`                                   | Creates a function that always returns the value.                                              |
+| `once(fn)`                                          | Runs at most once and caches the result or synchronous error.                                  |
+| `pipe(...functions)`                                | Composes unary functions from left to right.                                                   |
+| `compose(...functions)`                             | Composes unary functions from right to left.                                                   |
 | `sleep(ms, signal?)`                                | Waits for at least `ms`; rejects when the signal aborts.                                       |
 | `tryCatch(promise)`                                 | Converts a promise into `[data, null]` or `[null, error]`.                                     |
 | `retry(fn, options?)`                               | Retries a promise-returning function with delay, backoff, jitter, filtering, and cancellation. |
 | `retry(fn, times, delay)`                           | Compatibility overload where `times` is the total number of attempts.                          |
 | `timeout(promise, ms, message?)`                    | Rejects if the promise does not settle in time. It does not cancel the original promise.       |
 | `withResolvers<T>()`                                | Returns `{ promise, resolve, reject }`.                                                        |
+| `raceWithSignal(promise, signal?)`                  | Observes a signal without cancelling the underlying work.                                      |
+| `createAbortGroup(...signals)`                      | Creates a shared abort group that accepts additional signals.                                  |
+| `createLimiter(concurrency)`                        | Creates a reusable concurrency limiter.                                                        |
+| `poll(fn, options)`                                 | Polls with a predicate, interval, attempt limit, timeout, and abort support.                   |
+| `mapAsync(items, mapper, options?)`                 | Maps asynchronously with bounded concurrency and stable ordering.                              |
+| `filterAsync(items, predicate, options?)`           | Filters asynchronously with bounded concurrency and stable ordering.                           |
 | `debounce(fn, wait, options?)`                      | Creates a controlled debounced function.                                                       |
 | `throttle(fn, wait, options?)`                      | Creates a controlled throttled function.                                                       |
 | `promisePool(items, worker, concurrency, options?)` | Processes items with bounded concurrency and preserves result order.                           |
@@ -206,6 +234,7 @@ escapeHtml('<script>') // &lt;script&gt;
 | `factor`      | `1`                          | Exponential multiplier applied to numeric delays.               |
 | `maxDelay`    | `Infinity`                   | Maximum computed delay.                                         |
 | `jitter`      | `false`                      | Randomizes delay or computes it with a custom function.         |
+| `random`      | `Math.random`                | Injectable random source used by `jitter: true`.                |
 | `shouldRetry` | Always retry until exhausted | Async-capable predicate.                                        |
 | `signal`      | —                            | Cancels waiting and future attempts.                            |
 
@@ -244,6 +273,25 @@ const users = await promisePool(ids, (id, index, signal) => loadUser(id, { index
 
 The result array follows input order. The pool rejects when a worker rejects or the signal aborts; work already in progress is not forcibly terminated unless the worker uses the supplied signal.
 
+### Limiting, polling, and abort groups
+
+```ts
+import { createAbortGroup, createLimiter, poll } from 'toolsx/utils'
+
+const group = createAbortGroup(externalSignal)
+const limit = createLimiter(3)
+
+const values = await Promise.all(tasks.map((task) => limit(task, group.signal)))
+const ready = await poll(checkReady, {
+  interval: 200,
+  maxAttempts: 10,
+  signal: group.signal,
+  until: (value) => value === true
+})
+```
+
+The limiter exposes readonly `activeCount`, `pendingCount`, and `clearQueue(reason?)`. Cancelling queued work does not automatically stop already-running tasks that ignore their signal.
+
 ### Memoization
 
 ```ts
@@ -267,7 +315,7 @@ The default memoization key is the first argument. Supply `resolver` for multi-a
 
 ## Exported utility types
 
-`AnyFunction`, `Falsy`, `NestedArray`, `DebounceOptions`, `ThrottleOptions`, `ControlledFunction`, `DebouncedFunction`, `ThrottledFunction`, `RetryContext`, `RetryOptions`, `PromisePoolOptions`, `MemoizedFunction`, `MemoizeOptions`, `MemoizeAsyncOptions`, `MemoizeAsyncCacheEntry`, and `MemoizedAsyncFunction` are exported from `toolsx/utils`.
+`AnyFunction`, `RandomSource`, `Unary`, `Falsy`, `NestedArray`, `CompactObject`, `DeepReadonly`, `OnceFunction`, `Awaitable`, `AbortGroup`, `ConcurrencyLimiter`, `AsyncCollectionOptions`, `PollContext`, `PollOptions`, `DebounceOptions`, `ThrottleOptions`, `ControlledFunction`, `DebouncedFunction`, `ThrottledFunction`, `RetryContext`, `RetryOptions`, `PromisePoolOptions`, `MemoizedFunction`, `MemoizeOptions`, `MemoizeAsyncOptions`, `MemoizeAsyncCacheEntry`, and `MemoizedAsyncFunction` are exported from `toolsx/utils`.
 
 # Request client
 
@@ -328,7 +376,7 @@ type RequestResult<T> =
 | `timestamp` | Start timestamp in milliseconds.                             |
 | `duration`  | Total observed duration in milliseconds.                     |
 | `attempts`  | Number of network attempts; cache hits use `0`.              |
-| `fromCache` | `true` for an in-memory response-cache hit.                  |
+| `fromCache` | `true` for a response-cache hit.                             |
 | `deduped`   | `true` when the caller joined an existing in-flight request. |
 
 Use `unwrapRequestResult` when exception-based control flow is preferred.
@@ -361,7 +409,7 @@ Use `unwrapRequestResult` when exception-based control flow is preferred.
 | `refreshToken`       | Refreshes an expired token; concurrent refreshes share one promise.           |
 | `shouldRefreshToken` | Custom async-capable refresh predicate. Default: status `401`.                |
 | `retryPolicy`        | Retry configuration or `false`.                                               |
-| `responseCache`      | In-memory response-cache configuration or `false`.                            |
+| `responseCache`      | Response-cache configuration or `false`, with a custom sync adapter option.   |
 | `dedupe`             | Enables/disables safe-method in-flight deduplication.                         |
 | `concurrency`        | Maximum simultaneous network executions. Must be greater than zero.           |
 | `middlewares`        | Initial middleware list.                                                      |
@@ -458,6 +506,7 @@ The refresh function should update the token source used by `getToken`, or retur
 | `factor`      | Exponential multiplier for numeric delay.                                 |
 | `maxDelay`    | Maximum delay.                                                            |
 | `jitter`      | Boolean random jitter or custom jitter function.                          |
+| `random`      | Injectable random source used when `jitter: true`.                        |
 | `methods`     | Allowed HTTP methods.                                                     |
 | `statusCodes` | Allowed failure statuses. Network errors have no status and are eligible. |
 | `shouldRetry` | Async-capable final predicate.                                            |
@@ -467,7 +516,7 @@ Abort failures are never retried.
 
 ## Deduplication and cache
 
-Deduplication shares an in-flight promise for matching GET/HEAD keys. Cache is opt-in and stores successful transformed results in the request instance memory.
+Deduplication shares an in-flight promise for matching GET/HEAD keys. Cache is opt-in and stores successful transformed results. It uses request-instance memory by default or a configured synchronous adapter.
 
 Default keys include method, base URL, URL, query, body, and a hash of the auth token. Use `cacheKey` or `dedupeKey` when application-specific identity is required.
 
@@ -478,6 +527,7 @@ Default keys include method, base URL, URL, query, body, and a hash of the auth 
 | `ttl`                  | `30_000`  | Entry lifetime in milliseconds.                              |
 | `methods`              | `['GET']` | Cacheable methods.                                           |
 | `invalidateOnMutation` | `true`    | Clears entries after successful POST/PUT/PATCH/DELETE calls. |
+| `adapter`              | Memory    | Synchronous `RequestCacheAdapter` implementation.            |
 
 Cache controller methods:
 
@@ -488,7 +538,14 @@ Cache controller methods:
 - `request.cache.size`
 - `await request.invalidateCache(url, options)`
 
-This is an in-memory application cache, not the browser HTTP cache, and it is not shared across processes or request-client instances.
+```ts
+import { createMemoryRequestCache, createRequestClient } from 'toolsx/shared'
+
+const cache = createMemoryRequestCache()
+const request = createRequestClient({ responseCache: { adapter: cache, ttl: 30_000 } })
+```
+
+The default cache is not the browser HTTP cache and is not shared across processes or clients. Custom adapters synchronously implement `get`, `set`, `delete`, `clear`, `has`, `keys`, and `size`; `request.cache` controls the client-level primary adapter.
 
 ## Middleware
 
@@ -538,7 +595,8 @@ The Fetch API does not expose uniform byte-by-byte upload progress in every runt
 | `appendQuery(url, params)`                | Adds serialized query before a URL hash.                          |
 | `mergeSignals(...signals)`                | Creates a signal that aborts when any input aborts.               |
 | `createTimeoutSignal(timeout, reason?)`   | Creates an abort signal or `undefined` for non-positive timeouts. |
-| `createRequestId(prefix?)`                | Creates a timestamp/random request ID.                            |
+| `createRequestId(prefix?, random?)`       | Creates a timestamp/random request ID with injectable randomness. |
+| `createMemoryRequestCache(entries?)`      | Creates an in-memory `RequestCacheAdapter`.                       |
 | `isRequestSuccess(result)`                | Success type guard.                                               |
 | `isRequestFailure(result)`                | Failure type guard.                                               |
 | `mapRequestResult(result, transform)`     | Maps only a successful response.                                  |
@@ -548,7 +606,7 @@ The Fetch API does not expose uniform byte-by-byte upload progress in every runt
 
 ## Exported request types
 
-The request entry exports `FetchOptions`, `FetchRequest`, `FetchResponse`, `MappedResponseType`, `ResponseType`, `RequestMethod`, `TokenValue`, `TokenGetter`, `RequestProgressPhase`, `RequestProgress`, `RequestProgressHandler`, `RequestRetryContext`, `RequestRetryOptions`, `ResponseCacheOptions`, `RequestOptions`, `RawRequestOptions`, `RequestMeta`, `RequestErrorOptions`, `RequestSuccess`, `RequestFailure`, `RequestResult`, hook contexts, `RequestAuthOptions`, `TokenRefreshContext`, `RequestTrace`, middleware types, `CreateRequestOptions`, `AbortableRequest`, shortcut types, `RequestCacheController`, `RequestInstance`, `QueryValue`, and `QueryParams`.
+The request entry exports `FetchOptions`, `FetchRequest`, `FetchResponse`, `MappedResponseType`, `ResponseType`, `RequestMethod`, `TokenValue`, `TokenGetter`, `RequestProgressPhase`, `RequestProgress`, `RequestProgressHandler`, `RequestRetryContext`, `RequestRetryOptions`, `ResponseCacheOptions`, `RequestCacheEntry`, `RequestCacheAdapter`, `RequestOptions`, `RawRequestOptions`, `RequestMeta`, `RequestErrorOptions`, `RequestSuccess`, `RequestFailure`, `RequestResult`, hook contexts, `RequestAuthOptions`, `TokenRefreshContext`, `RequestTrace`, middleware types, `CreateRequestOptions`, `AbortableRequest`, shortcut types, `RequestCacheController`, `RequestInstance`, `QueryValue`, and `QueryParams`.
 
 # Cookie
 
@@ -583,15 +641,18 @@ In an SSR/Node.js environment with no `document`, `isAvailable()` is `false`, wr
 
 ## Cookie options
 
-| Option      | Description                                                    |
-| ----------- | -------------------------------------------------------------- |
-| `expires`   | `Date` or absolute millisecond timestamp. Invalid dates throw. |
-| `maxAge`    | Lifetime in seconds.                                           |
-| `path`      | Defaults to `/`.                                               |
-| `domain`    | Cookie domain.                                                 |
-| `sameSite`  | `'Strict'`, `'Lax'`, or `'None'`.                              |
-| `secure`    | Adds the `Secure` attribute.                                   |
-| `onSuccess` | Called after adapter write succeeds.                           |
+| Option        | Description                                                    |
+| ------------- | -------------------------------------------------------------- |
+| `expires`     | `Date` or absolute millisecond timestamp. Invalid dates throw. |
+| `maxAge`      | Lifetime in seconds.                                           |
+| `path`        | Defaults to `/`.                                               |
+| `domain`      | Cookie domain.                                                 |
+| `sameSite`    | `'Strict'`, `'Lax'`, or `'None'`.                              |
+| `secure`      | Adds the `Secure` attribute.                                   |
+| `httpOnly`    | Adds `HttpOnly` for server-side serialization.                 |
+| `partitioned` | Adds the `Partitioned` attribute.                              |
+| `priority`    | Adds `'Low'`, `'Medium'`, or `'High'`.                         |
+| `onSuccess`   | Called after adapter write succeeds.                           |
 
 ## Cookie methods
 
@@ -611,7 +672,7 @@ In an SSR/Node.js environment with no `document`, `isAvailable()` is `false`, wr
 
 Browser JavaScript cannot create `HttpOnly` cookies. Set sensitive `HttpOnly` cookies from the server.
 
-Exported Cookie types: `CookieSameSite`, `CookieOptions`, and `CookieAdapter`.
+Exported Cookie types: `CookieSameSite`, `CookiePriority`, `CookieOptions`, and `CookieAdapter`.
 
 # Storage with expiration
 
@@ -684,6 +745,10 @@ Expired entries are removed. Reading a valid sliding-expiration item renews its 
 | `getOrSet(key, createValue, options?)` | Reads a valid value or creates/stores one synchronously.                  |
 | `has(key)`                             | Checks for a valid, non-expired item.                                     |
 | `keys()`                               | Returns logical keys from primary and fallback storage.                   |
+| `entries<T>()`                         | Returns `[key, value]` pairs for all valid entries.                       |
+| `values<T>()`                          | Returns all valid values.                                                 |
+| `updateItem(key, updater, options?)`   | Updates an existing valid entry or returns `null`.                        |
+| `purgeExpired()`                       | Removes all expired entries and returns the count.                        |
 | `removeItem(key)`                      | Removes from primary and fallback storage.                                |
 | `clear()`                              | Clears the namespace, or the entire wrapped storages without a namespace. |
 | `subscribe(listener)`                  | Subscribes to local/external `set`, `remove`, and `clear` changes.        |
@@ -694,6 +759,28 @@ Expired entries are removed. Reading a valid sliding-expiration item renews its 
 `StorageChange` contains `type`, optional `key`/`value`, and `source: 'local' | 'external'`.
 
 Exported Storage types: `StorageExpiration`, `StorageParseErrorStrategy`, `StorageChangeType`, `StorageMigrationContext`, `StorageSyncOptions`, `StorageWithExpirationOptions`, `StorageItem`, `StorageSetOptions`, `StorageGetResult`, and `StorageChange`.
+
+## Async storage adapters
+
+`AsyncStorageWithExpiration` targets IndexedDB, remote key-value stores, and other Promise-based storage without changing the synchronous class API.
+
+```ts
+import { AsyncStorageWithExpiration, createAsyncStorageAdapter } from 'toolsx/shared'
+
+const storage = new AsyncStorageWithExpiration(createAsyncStorageAdapter(localStorage), {
+  namespace: 'app',
+  validateKey: false
+})
+
+const value = await storage.getOrSet('settings', async () => loadDefaults(), { ttl: 60_000 })
+await storage.updateItem('settings', async (current) => ({ ...current, ready: true }))
+```
+
+`AsyncStorageAdapter` requires async-compatible `getItem`, `setItem`, and `removeItem`; `keys` and `clear` are optional. Namespace clearing, iteration, and bulk expiry cleanup require `keys()`. `createAsyncStorageAdapter(storage)` wraps synchronous Web Storage.
+
+Async instances provide `setItem`, `getItem`, `getValue`, `getOrSet`, `has`, `keys`, `entries`, `values`, `updateItem`, `purgeExpired`, `removeItem`, and `clear`. Concurrent `getOrSet` calls for one key share the creation promise.
+
+Exported async storage types: `AsyncStorageValue`, `AsyncStorageAdapter`, and `AsyncStorageWithExpirationOptions`.
 
 # Typed EventEmitter
 
@@ -744,16 +831,20 @@ Listener options support `priority` (higher runs first) and `signal` (auto-unsub
 | `emit(eventName, payload?)`              | Invokes synchronously and does not await promises. Sync errors propagate. |
 | `safeEmit(eventName, payload?)`          | Collects synchronous listener errors and continues.                       |
 | `emitAsync(eventName, payload?)`         | Awaits listeners sequentially; errors reject.                             |
+| `emitParallel(eventName, payload?)`      | Starts listeners in parallel and rejects on any error.                    |
 | `safeEmitAsync(eventName, payload?)`     | Awaits sequentially and collects all errors.                              |
+| `waitFor(eventName, options?)`           | Waits for the next exact event with timeout and signal support.           |
 | `clear(eventName?)`                      | Clears one exact event or all exact/pattern/any listeners.                |
 | `listenerCount(eventName)`               | Counts exact listeners for one event.                                     |
+| `eventNames()`                           | Returns event names that currently have exact listeners.                  |
+| `hasListeners(eventName?)`               | Checks an exact event or the entire emitter for listeners.                |
 | `totalListenerCount()`                   | Counts exact, pattern, and any listeners.                                 |
 | `setMaxListeners(value)`                 | Updates the threshold and returns the emitter.                            |
 | `createListenerHelper<TEvents>()`        | Preserves payload type when declaring listeners separately.               |
 
 Use `emitAsync`/`safeEmitAsync` for promise-returning listeners. `safeEmit` only provides immediate synchronous error collection.
 
-Exported EventEmitter types: `EventListener`, `Unsubscribe`, `EventListenerOptions`, `EventEmitterOptions`, `EventAnyPayload`, and `EventAnyListener`.
+Exported EventEmitter types: `EventListener`, `Unsubscribe`, `EventListenerOptions`, `EventWaitOptions`, `EventEmitterOptions`, `EventAnyPayload`, and `EventAnyListener`.
 
 # Framework examples
 
@@ -766,7 +857,7 @@ Exported EventEmitter types: `EventListener`, `Unsubscribe`, `EventListenerOptio
 - `clone` falls back to JSON cloning when `structuredClone` is unavailable, so unsupported JSON values, functions, and cyclic references are not preserved in that fallback.
 - Cookie and Storage helpers do not encrypt data. Do not treat client-side storage as a secure credential vault.
 - Prefer server-set `HttpOnly`, `Secure`, and appropriate `SameSite` cookies for sensitive browser credentials.
-- Request response caching is local memory, not persistent storage or standards-based HTTP caching.
+- Request caching uses instance memory by default; persistence depends on a custom adapter, and neither mode is standards-based HTTP caching.
 - Cookie and Web Storage availability/capacity depend on browser privacy policy and user settings.
 
 # License

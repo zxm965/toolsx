@@ -1,3 +1,5 @@
+import type { RandomSource } from './type'
+
 const splitWords = (value: string) =>
   value
     .trim()
@@ -69,6 +71,10 @@ export function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => htmlEntities[character])
 }
 
+export function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function mask(value: string, visibleStart = 0, visibleEnd = 4, maskCharacter = '*') {
   const characters = Array.from(value)
   const start = Math.max(0, visibleStart)
@@ -81,7 +87,7 @@ export function mask(value: string, visibleStart = 0, visibleEnd = 4, maskCharac
 
 const defaultRandomAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
-export function randomString(length: number, alphabet = defaultRandomAlphabet, random: () => number = Math.random) {
+export function randomString(length: number, alphabet = defaultRandomAlphabet, random: RandomSource = Math.random) {
   if (!Number.isInteger(length) || length < 0) {
     throw new RangeError('length must be a non-negative integer')
   }

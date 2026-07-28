@@ -1,6 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { debounce, memoize, memoizeAsync, promisePool, retry, sleep, throttle, timeout, tryCatch, withResolvers } from '../utils'
+import {
+  createAbortGroup,
+  createLimiter,
+  debounce,
+  filterAsync,
+  mapAsync,
+  memoize,
+  memoizeAsync,
+  poll,
+  promisePool,
+  raceWithSignal,
+  retry,
+  sleep,
+  throttle,
+  timeout,
+  tryCatch,
+  withResolvers
+} from '../utils'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -39,6 +56,17 @@ describe('async utilities', () => {
     const shouldRetry = vi.fn().mockReturnValue(false)
     await expect(retry(async () => Promise.reject(new Error('stop')), { retries: 4, shouldRetry })).rejects.toThrow('stop')
     expect(shouldRetry).toHaveBeenCalledOnce()
+    let jitterAttempts = 0
+    await expect(
+      retry(
+        async () => {
+          jitterAttempts += 1
+          if (jitterAttempts === 1) throw new Error('retry with jitter')
+          return 'jittered'
+        },
+        { delay: 1, jitter: true, random: () => 0, retries: 1 }
+      )
+    ).resolves.toBe('jittered')
     await expect(retry(async () => 'never', 0)).rejects.toThrow(RangeError)
   })
 
@@ -52,6 +80,41 @@ describe('async utilities', () => {
     const deferred = withResolvers<number>()
     deferred.resolve(42)
     await expect(deferred.promise).resolves.toBe(42)
+  })
+
+  it('groups cancellation and races promises with signals', async () => {
+    const external = new AbortController()
+    const group = createAbortGroup(external.signal)
+    const pending = raceWithSignal(new Promise(() => {}), group.signal)
+    external.abort(new Error('stop'))
+    await expect(pending).rejects.toThrow('stop')
+    expect(group.signal.aborted).toBe(true)
+    await expect(raceWithSignal(Promise.resolve('ok'))).resolves.toBe('ok')
+
+    const aborted = new AbortController()
+    aborted.abort()
+    await expect(raceWithSignal(Promise.resolve('late'), aborted.signal)).rejects.toMatchObject({ name: 'AbortError' })
+
+    const added = new AbortController()
+    const dynamicGroup = createAbortGroup()
+    dynamicGroup.add(added.signal)
+    added.abort('dynamic')
+    expect(dynamicGroup.signal.aborted).toBe(true)
+  })
+
+  it('polls until a condition matches', async () => {
+    let value = 0
+    await expect(
+      poll(() => ++value, {
+        interval: 0,
+        maxAttempts: 3,
+        until: (result) => result === 3
+      })
+    ).resolves.toBe(3)
+
+    await expect(poll(() => 1, { maxAttempts: 1, until: () => false })).rejects.toThrow('max attempts')
+    await expect(poll(() => 1, { maxAttempts: 0, until: () => true })).rejects.toThrow(RangeError)
+    await expect(poll(() => 1, { timeout: -1, until: () => true })).rejects.toThrow(RangeError)
   })
 })
 
@@ -105,6 +168,37 @@ describe('concurrency and memoization', () => {
     expect(values).toEqual([2, 4, 6, 8])
     expect(maxActive).toBe(2)
     await expect(promisePool([1], async (value) => value, 0)).rejects.toThrow(RangeError)
+  })
+
+  it('reuses concurrency limiters and supports async collections', async () => {
+    const limiter = createLimiter(1)
+    const calls: number[] = []
+    const first = limiter(async () => {
+      calls.push(1)
+      await Promise.resolve()
+      return 1
+    })
+    const second = limiter(() => {
+      calls.push(2)
+      return 2
+    })
+
+    expect(limiter.activeCount).toBe(1)
+    expect(limiter.pendingCount).toBe(1)
+    await expect(Promise.all([first, second])).resolves.toEqual([1, 2])
+    expect(calls).toEqual([1, 2])
+    await expect(mapAsync([1, 2, 3], async (value) => value * 2, { concurrency: 2 })).resolves.toEqual([2, 4, 6])
+    await expect(filterAsync([1, 2, 3, 4], async (value) => value % 2 === 0, { concurrency: 2 })).resolves.toEqual([2, 4])
+    expect(() => createLimiter(0)).toThrow(RangeError)
+
+    let release!: () => void
+    const queuedLimiter = createLimiter(1)
+    const active = queuedLimiter(() => new Promise<void>((resolve) => (release = resolve)))
+    const queued = queuedLimiter(() => 'queued')
+    queuedLimiter.clearQueue(new Error('cleared'))
+    await expect(queued).rejects.toThrow('cleared')
+    release()
+    await active
   })
 
   it('memoizes synchronous and asynchronous work', async () => {

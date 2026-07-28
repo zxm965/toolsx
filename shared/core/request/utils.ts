@@ -125,10 +125,14 @@ export function createTimeoutSignal(timeout?: number, reason: unknown = new DOME
   return controller.signal
 }
 
-export function createRequestId(prefix = 'req') {
-  const random = Math.random().toString(36).slice(2, 10)
+export function createRequestId(prefix = 'req', random: () => number = Math.random) {
+  const randomValue = random()
+  if (!Number.isFinite(randomValue)) throw new RangeError('random source must return a finite number')
+  const randomPart = Math.floor(Math.abs(randomValue % 1) * 36 ** 8)
+    .toString(36)
+    .padStart(8, '0')
 
-  return `${prefix}_${Date.now().toString(36)}_${random}`
+  return `${prefix}_${Date.now().toString(36)}_${randomPart}`
 }
 
 export function isRequestSuccess<T>(result: RequestResult<T>): result is RequestSuccess<T> {

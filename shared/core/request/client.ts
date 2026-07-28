@@ -1,5 +1,6 @@
 import { FetchError, ofetch } from 'ofetch'
 
+import { createMemoryRequestCache } from './cache'
 import { RequestSemaphore } from './concurrency'
 import { RequestError, normalizeRequestError } from './errors'
 import { createProgressFetch } from './progress'
@@ -11,6 +12,7 @@ import type {
   MappedResponseType,
   RawRequestOptions,
   RequestFailure,
+  RequestCacheAdapter,
   RequestInstance,
   RequestMeta,
   RequestMethod,
@@ -27,11 +29,6 @@ import type {
   TokenValue
 } from './types'
 import { createAuthorizationHeader, createRequestId, getHeader, mergeHeaders, mergeSignals } from './utils'
-
-interface CacheEntry {
-  expiresAt: number
-  result: RequestResult<unknown>
-}
 
 interface RefreshState {
   failedToken: TokenValue
@@ -52,7 +49,7 @@ const defaultRetryPolicy: RequestRetryOptions = {
   statusCodes: retryStatusCodes
 }
 
-const defaultCacheOptions: Required<ResponseCacheOptions> = {
+const defaultCacheOptions: Required<Omit<ResponseCacheOptions, 'adapter'>> = {
   invalidateOnMutation: true,
   methods: ['GET'],
   ttl: 30_000
@@ -246,7 +243,7 @@ function getRetryDelay(policy: RequestRetryOptions, context: RequestRetryContext
   const capped = Math.min(Math.max(0, base), policy.maxDelay ?? Number.POSITIVE_INFINITY)
 
   if (typeof policy.jitter === 'function') return Math.max(0, policy.jitter(capped, context))
-  return policy.jitter ? Math.random() * capped : capped
+  return policy.jitter ? (policy.random ?? Math.random)() * capped : capped
 }
 
 function wait(delay: number, signal?: AbortSignal) {
@@ -310,12 +307,22 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
   const baseFetch = config.fetch ?? globalThis.fetch.bind(globalThis)
   const client = ofetch.create(fetchConfig as unknown as FetchOptions<ResponseType>, { fetch: createProgressFetch(baseFetch) })
   const semaphore = new RequestSemaphore(mergedConfig.concurrency ?? Number.POSITIVE_INFINITY)
-  const cacheEntries = new Map<string, CacheEntry>()
+  const defaultCacheAdapter = createMemoryRequestCache()
+  const primaryCacheAdapter =
+    typeof mergedConfig.responseCache === 'object' && mergedConfig.responseCache.adapter ? mergedConfig.responseCache.adapter : defaultCacheAdapter
+  const cacheAdapters = new Set<RequestCacheAdapter>([primaryCacheAdapter])
   const inFlightRequests = new Map<string, Promise<RequestResult<unknown>>>()
   const runtimeMiddlewares: RequestMiddleware[] = []
   const invalidateOnMutation = typeof mergedConfig.responseCache === 'object' ? (mergedConfig.responseCache.invalidateOnMutation ?? true) : true
   let refreshPromise: Promise<TokenValue> | undefined
   let refreshState: RefreshState | undefined
+
+  const clearCacheAdapters = () => cacheAdapters.forEach((adapter) => adapter.clear())
+  const resolveCacheAdapter = (options: ResponseCacheOptions) => {
+    const adapter = options.adapter ?? primaryCacheAdapter
+    cacheAdapters.add(adapter)
+    return adapter
+  }
 
   const getToken = () => mergedConfig.getToken?.()
 
@@ -419,7 +426,7 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
         try {
           token = await refreshAccessToken(refreshContext)
           refreshed = true
-          cacheEntries.clear()
+          clearCacheAdapters()
           continue
         } catch (error) {
           result = createFailure(error, createMeta(url, method, requestId, timestamp, attempt))
@@ -480,13 +487,14 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
       const typedOptions = options as unknown as RequestOptions<ResponseType, unknown, unknown>
       const requestKey = options.cacheKey ?? options.dedupeKey ?? createRequestKey(url, typedOptions, token, mergedConfig.baseURL)
       const cacheOptions = resolveCacheOptions(typedOptions, mergedConfig, method)
-      const cached = cacheOptions ? cacheEntries.get(requestKey) : undefined
+      const cacheAdapter = cacheOptions ? resolveCacheAdapter(cacheOptions) : undefined
+      const cached = cacheAdapter?.get(requestKey)
 
       if (cached) {
         if (cached.expiresAt > Date.now()) {
           return await observeResult(cloneResult(cached.result) as RequestResult<TResult>, timestamp, { attempts: 0, fromCache: true })
         }
-        cacheEntries.delete(requestKey)
+        cacheAdapter?.delete(requestKey)
       }
 
       const dedupe = shouldDedupe(typedOptions, mergedConfig, method)
@@ -517,11 +525,11 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
       if (dedupe && inFlightRequests.get(requestKey) === task) inFlightRequests.delete(requestKey)
 
       if (!result.error && cacheOptions) {
-        cacheEntries.set(requestKey, { expiresAt: Date.now() + Math.max(0, cacheOptions.ttl), result: cloneResult(result) as RequestResult<unknown> })
+        cacheAdapter?.set(requestKey, { expiresAt: Date.now() + Math.max(0, cacheOptions.ttl), result: cloneResult(result) as RequestResult<unknown> })
       }
 
       if (!result.error && mutationMethods.has(method) && invalidateOnMutation) {
-        cacheEntries.clear()
+        clearCacheAdapters()
       }
 
       return await observeResult(result, timestamp)
@@ -603,15 +611,20 @@ export function createRequestClient(config: CreateRequestOptions = {}): RequestI
   request.invalidateCache = async (url, options = {}) => {
     const token = await getToken()
     const key = options.cacheKey ?? createRequestKey(url, options as unknown as RequestOptions<ResponseType, unknown, unknown>, token, mergedConfig.baseURL)
-    return cacheEntries.delete(key)
+    const cacheOptions = resolveCacheOptions(
+      options as unknown as RequestOptions<ResponseType, unknown, unknown>,
+      mergedConfig,
+      normalizeMethod(options.method)
+    )
+    return (cacheOptions ? resolveCacheAdapter(cacheOptions) : primaryCacheAdapter).delete(key)
   }
   request.cache = {
-    clear: () => cacheEntries.clear(),
-    delete: (key) => cacheEntries.delete(key),
-    has: (key) => cacheEntries.has(key),
-    keys: () => [...cacheEntries.keys()],
+    clear: () => primaryCacheAdapter.clear(),
+    delete: (key) => primaryCacheAdapter.delete(key),
+    has: (key) => primaryCacheAdapter.has(key),
+    keys: () => primaryCacheAdapter.keys(),
     get size() {
-      return cacheEntries.size
+      return primaryCacheAdapter.size
     }
   }
 

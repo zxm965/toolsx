@@ -1,11 +1,15 @@
 export type CookieSameSite = 'Strict' | 'Lax' | 'None'
+export type CookiePriority = 'Low' | 'Medium' | 'High'
 
 export interface CookieOptions {
   domain?: string
   expires?: Date | number
+  httpOnly?: boolean
   maxAge?: number
   onSuccess?: () => void
+  partitioned?: boolean
   path?: string
+  priority?: CookiePriority
   sameSite?: CookieSameSite
   secure?: boolean
 }
@@ -68,7 +72,7 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
     throw new Error('Cookie name must not be empty')
   }
 
-  const { domain, maxAge, path = '/', sameSite, secure } = options
+  const { domain, httpOnly, maxAge, partitioned, path = '/', priority, sameSite, secure } = options
   const expires = normalizeExpires(options.expires)
   const segments = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`]
 
@@ -78,6 +82,9 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   if (path) segments.push(`Path=${path}`)
   if (sameSite) segments.push(`SameSite=${sameSite}`)
   if (secure) segments.push('Secure')
+  if (httpOnly) segments.push('HttpOnly')
+  if (partitioned) segments.push('Partitioned')
+  if (priority) segments.push(`Priority=${priority}`)
 
   return segments.join('; ')
 }

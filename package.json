@@ -1,6 +1,6 @@
 {
   "name": "toolsx",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Tools X",
   "keywords": [
     "common",
@@ -73,8 +73,8 @@
     "@changesets/cli": "^2.31.1",
     "@types/node": "latest",
     "@vitest/coverage-v8": "^4.1.10",
-    "oxfmt": "^0.48.0",
-    "oxlint": "^1.63.0",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
     "typedoc": "^0.28.20",
     "typescript": "^5.9.3",
     "unbuild": "^3.6.1",
@@ -83,5 +83,5 @@
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@11.0.9"
+  "packageManager": "pnpm@11.17.0"
 }

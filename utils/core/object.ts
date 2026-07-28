@@ -1,5 +1,11 @@
 import { isPlainObject } from './type'
 
+export type CompactObject<T extends object> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K]
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>
+}
+
 const unsafeKeys = new Set<PropertyKey>(['__proto__', 'constructor', 'prototype'])
 
 function assertSafeKey(key: PropertyKey) {
@@ -38,6 +44,28 @@ export function omit<T extends object, K extends keyof T>(object: T, keys: reado
   }
 
   return result as Omit<T, K>
+}
+
+export function defaults<T extends object, U extends object>(object: T, values: U): T & U {
+  const result = { ...object } as Record<PropertyKey, unknown>
+
+  for (const key of Reflect.ownKeys(values)) {
+    assertSafeKey(key)
+    if (result[key] === undefined) result[key] = values[key as keyof U]
+  }
+
+  return result as T & U
+}
+
+export function compactObject<T extends object>(object: T): CompactObject<T> {
+  const result = {} as Record<PropertyKey, unknown>
+
+  for (const key of Reflect.ownKeys(object)) {
+    const value = object[key as keyof T]
+    if (value !== undefined) result[key] = value
+  }
+
+  return result as CompactObject<T>
 }
 
 export function deepMerge<T extends object, U extends object>(target: T, source: U): T & U {
@@ -134,6 +162,55 @@ export function mapKeys<T extends object, K extends PropertyKey>(object: T, tran
   }
 
   return result
+}
+
+export function invert<K extends PropertyKey, V extends PropertyKey>(object: Record<K, V>) {
+  const result = {} as Record<V, K>
+
+  for (const key of Reflect.ownKeys(object) as K[]) {
+    const value = object[key]
+    assertSafeKey(value)
+    result[value] = key
+  }
+
+  return result
+}
+
+export type DeepReadonly<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends Map<infer TKey, infer TValue>
+    ? ReadonlyMap<DeepReadonly<TKey>, DeepReadonly<TValue>>
+    : T extends Set<infer TValue>
+      ? ReadonlySet<DeepReadonly<TValue>>
+      : T extends object
+        ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+        : T
+
+export function deepFreeze<T>(value: T): DeepReadonly<T> {
+  const seen = new WeakSet<object>()
+
+  const freeze = (current: unknown) => {
+    if (typeof current !== 'object' || current === null || seen.has(current)) return
+    seen.add(current)
+
+    if (current instanceof Map) {
+      current.forEach((entryValue, entryKey) => {
+        freeze(entryKey)
+        freeze(entryValue)
+      })
+    } else if (current instanceof Set) {
+      current.forEach(freeze)
+    }
+
+    for (const key of Reflect.ownKeys(current)) {
+      freeze((current as Record<PropertyKey, unknown>)[key])
+    }
+
+    Object.freeze(current)
+  }
+
+  freeze(value)
+  return value as DeepReadonly<T>
 }
 
 function compareMaps(left: Map<unknown, unknown>, right: Map<unknown, unknown>, seen: WeakMap<object, object>) {

@@ -1,5 +1,14 @@
 # toolsx
 
+## 0.0.7
+
+### Patch Changes
+
+- 新增数组、对象、数字、字符串、JSON 与函数组合通用工具。
+- 新增并发限制、轮询、异步集合处理、Signal 竞速与取消组。
+- 扩展 EventEmitter、同步/异步 Storage、Cookie 标准属性和 Request 缓存适配器。
+- 补齐新增公开 API 的测试、中英文文档与使用示例。
+
 ## 0.0.6
 
 ### Patch Changes

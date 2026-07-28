@@ -2,6 +2,41 @@
 
 [English](examples.en.md) | 简体中文
 
+## 通用工具
+
+```ts
+import { createAbortGroup, createLimiter, poll, stableJsonStringify, uniqueBy } from 'toolsx/utils'
+
+const users = uniqueBy(records, (item) => item.id)
+const cacheKey = stableJsonStringify({ filters, users: users.map((item) => item.id) })
+
+const abortGroup = createAbortGroup(pageSignal)
+const limit = createLimiter(3)
+const results = await Promise.all(tasks.map((task) => limit(task, abortGroup.signal)))
+
+const ready = await poll(checkReady, {
+  interval: 250,
+  maxAttempts: 8,
+  signal: abortGroup.signal,
+  until: Boolean
+})
+```
+
+## 异步 Storage 适配器
+
+```ts
+import { AsyncStorageWithExpiration, createAsyncStorageAdapter } from 'toolsx/shared'
+
+const storage = new AsyncStorageWithExpiration(createAsyncStorageAdapter(localStorage), {
+  namespace: 'app',
+  validateKey: false
+})
+
+const settings = await storage.getOrSet('settings', async () => ({ theme: 'light' }), {
+  ttl: 60_000
+})
+```
+
 ## Vue
 
 ```ts

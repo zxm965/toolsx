@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { RequestError, createRequestClient } from '../shared'
+import { RequestError, createMemoryRequestCache, createRequestClient } from '../shared'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   const value = JSON.stringify(body)
@@ -186,5 +186,21 @@ describe('createRequestClient', () => {
     request.cache.clear()
     expect(request.cache.size).toBe(0)
     vi.useRealTimers()
+  })
+
+  it('supports custom response cache adapters', async () => {
+    const cache = createMemoryRequestCache()
+    const set = vi.spyOn(cache, 'set')
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true }))
+    const request = createRequestClient({ fetch: fetchMock, responseCache: { adapter: cache, ttl: 1_000 }, retryPolicy: false })
+
+    await request.get('/custom-cache')
+    expect(set).toHaveBeenCalledOnce()
+    expect(request.cache.size).toBe(1)
+    const cached = await request.get('/custom-cache')
+    expect(cached.meta.fromCache).toBe(true)
+    expect(fetchMock).toHaveBeenCalledOnce()
+    request.cache.clear()
+    expect(cache.size).toBe(0)
   })
 })
