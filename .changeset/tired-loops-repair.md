@@ -1,0 +1,5 @@
+---
+"vite": patch
+---
+
+more utils

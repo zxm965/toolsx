@@ -1,9 +1,9 @@
 # toolsx
 
-一些简单常用的 TypeScript 工具函数，按场景拆成两个入口：
+轻量、类型安全的 TypeScript 工具库，按运行环境拆成两个入口：
 
-- `toolsx/utils`：与运行环境无关的通用函数。
-- `toolsx/shared`：浏览器/应用侧常用能力，包括 request、Cookie、Storage、EventEmitter。
+- `toolsx/utils`：数组、对象、字符串、异步和类型判断等无运行环境依赖的函数。
+- `toolsx/shared`：request、Cookie、Storage 和 EventEmitter 等应用侧能力。
 
 ## 安装
 
@@ -11,295 +11,378 @@
 pnpm add toolsx
 ```
 
-## utils
-
-`utils` 提供一组与业务框架无关的通用函数。
-
 ```ts
-import { chunk, debounce, isDefined, pick, sleep, tryCatch, unique } from 'toolsx/utils'
-
-const ids = unique([1, 1, 2, 3])
-const pages = chunk(ids, 2)
-const user = pick({ id: 1, name: 'Tom', password: 'secret' }, ['id', 'name'])
-const values = [1, null, 2, undefined].filter(isDefined)
-const [data, error] = await tryCatch(fetch('/api/user').then((res) => res.json()))
-
-await sleep(300)
-
-const onResize = debounce(() => {
-  console.log('resize settled')
-}, 200)
+import { debounce, retry, unique } from 'toolsx/utils'
+import { Cookie, EventEmitter, StorageWithExpiration, createRequestClient } from 'toolsx/shared'
 ```
+
+## utils
 
 ### Type guards
 
-- `isNumber(value)`：判断是否为 `number`；不排除 `NaN`。
-- `isFiniteNumber(value)`：判断是否为有限数字。
-- `isString(value)`：判断是否为字符串。
-- `isBoolean(value)`：判断是否为布尔值。
-- `isFunction(value)`：判断是否为函数。
-- `isObject(value)`：判断是否为非 `null` 对象。
-- `isPlainObject(value)`：判断是否为普通对象。
-- `isNil(value)`：判断是否为 `null` 或 `undefined`。
-- `isDefined(value)`：判断不是 `null` / `undefined`，适合 `array.filter(isDefined)`。
-- `isEmpty(value)`：判断空值、空字符串、空数组、空 `Map`、空 `Set`、空对象。
+- `isNumber` / `isFiniteNumber`
+- `isString` / `isBoolean` / `isFunction`
+- `isObject` / `isPlainObject`
+- `isNil` / `isDefined`
+- `isEmpty`
 
-### Array / Object
+`isNumber(NaN)` 返回 `true`；需要排除 `NaN` 和无穷值时使用 `isFiniteNumber`。
 
-- `toArray(value)`：把单个值转成数组；`null` / `undefined` 返回空数组。
-- `unique(array)`：数组去重，基于 `Set`。
-- `chunk(array, size)`：按指定大小拆分数组。
-- `last(array)`：获取数组最后一项。
-- `groupBy(array, getKey)`：按 key 分组。
-- `sortBy(array, getValue, order)`：按字段排序，返回新数组。
-- `pick(object, keys)`：选择对象字段。
-- `omit(object, keys)`：排除对象字段。
-- `deepMerge(target, source)`：深合并普通对象。
-- `get(object, path, defaultValue)`：按路径读取对象属性。
-- `set(object, path, value)`：按路径写入对象属性，会修改原对象。
-- `clone(value)`：优先使用 `structuredClone`，兜底使用 JSON 克隆。
+### Array
+
+- `toArray` / `unique` / `compact`
+- `flatten(array, depth)`
+- `intersection` / `difference` / `partition`
+- `chunk` / `last`
+- `groupBy` / `keyBy`
+- `sortBy` / `shuffle` / `sample`
 
 ```ts
-import { deepMerge, get, groupBy, set, sortBy } from 'toolsx/utils'
+import { compact, intersection, keyBy, partition } from 'toolsx/utils'
 
-const grouped = groupBy([{ type: 'a' }, { type: 'b' }], (item) => item.type)
-const sorted = sortBy([{ age: 18 }, { age: 12 }], (item) => item.age)
+const values = compact([0, 1, null, 2])
+const sharedIds = intersection([1, 2, 3], [2, 3, 4])
+const [enabled, disabled] = partition(users, (user) => user.enabled)
+const usersById = keyBy(users, (user) => user.id)
+```
+
+### Object
+
+- `pick` / `omit`
+- `deepMerge` / `deepEqual` / `clone`
+- `get` / `has` / `set` / `unset`
+- `mapValues` / `mapKeys`
+
+`set`、`unset` 和 `deepMerge` 会拒绝 `__proto__`、`constructor`、`prototype` 路径，避免原型污染。
+
+```ts
+import { deepMerge, get, has, set } from 'toolsx/utils'
+
 const options = deepMerge({ theme: { color: 'red' } }, { theme: { size: 12 } })
-const color = get<string>(options, 'theme.color')
 set(options, 'theme.color', 'blue')
+
+get<string>(options, 'theme.color')
+has(options, 'theme.size')
 ```
 
 ### Number / String
 
-- `clamp(value, min, max)`：把数值限制在区间内。
-- `randomInt(min, max)`：生成包含边界的随机整数。
-- `capitalize(value)`：首字母大写。
-- `camelCase(value)`：转小驼峰。
-- `kebabCase(value)`：转短横线命名。
-- `snakeCase(value)`：转下划线命名。
-- `trim(value, chars)`：去除首尾空白或指定字符。
+- `clamp` / `randomInt`
+- `capitalize` / `camelCase` / `pascalCase` / `kebabCase` / `snakeCase`
+- `trim` / `truncate`
+- `escapeHtml` / `mask` / `randomString`
 
-### Async / JSON / Function
+### Async / Function / JSON
 
-- `noop()`：空函数，适合作为默认回调。
-- `sleep(ms)`：等待指定毫秒。
-- `tryCatch(promise)`：把 Promise 转成 `[data, error]` 元组。
-- `retry(fn, times, delay)`：失败重试异步任务。
-- `timeout(promise, ms, message)`：给 Promise 增加超时控制。
-- `withResolvers<T>()`：创建 `{ promise, resolve, reject }`。
-- `debounce(fn, wait)`：防抖函数，返回值带 `cancel()`。
-- `throttle(fn, wait)`：节流函数，返回值带 `cancel()`。
-- `safeJsonParse(value, fallback)`：安全 JSON 解析。
-- `safeJsonStringify(value, fallback)`：安全 JSON 序列化。
+- `noop` / `sleep(ms, signal)`
+- `tryCatch` / `timeout` / `withResolvers`
+- `retry`
+- `debounce` / `throttle`
+- `promisePool`
+- `memoize` / `memoizeAsync`
+- `safeJsonParse` / `safeJsonStringify`
+
+```ts
+import { debounce, memoizeAsync, promisePool, retry } from 'toolsx/utils'
+
+const data = await retry(() => loadData(), {
+  retries: 3,
+  delay: 200,
+  factor: 2,
+  maxDelay: 3_000,
+  jitter: true,
+  shouldRetry: (error) => isNetworkError(error)
+})
+
+const search = debounce(runSearch, 200, {
+  leading: false,
+  trailing: true,
+  maxWait: 1_000
+})
+
+search.pending()
+search.flush()
+search.cancel()
+
+const results = await promisePool(ids, (id) => loadUser(id), 4)
+const loadUserOnce = memoizeAsync(loadUser, { ttl: 30_000 })
+```
+
+兼容旧版调用：`retry(fn, times, delay)`。`memoize` / `memoizeAsync` 默认使用第一个参数作为缓存键，多参数函数建议传入 `resolver`。
 
 ## request
 
-`request` 基于 `ofetch`，适合在应用或 SDK 中对外暴露统一 HTTP 能力。它默认不抛请求错误，而是返回结构化结果；业务层成功/失败由使用方根据协议判断。
+`createRequestClient` 基于 `ofetch`，默认不抛请求错误，而是返回结构化结果：
 
 ```ts
 import { createRequestClient, unwrapRequestResult } from 'toolsx/shared'
 
-export const useRequest = createRequestClient({
-  baseURL: 'https://api.example.com',
+export const request = createRequestClient({
+  baseURL: '/api',
   getToken: () => localStorage.getItem('access_token')
 })
 
-const result = await useRequest.get<{ name: string }>('/user')
+const result = await request.get<{ name: string }>('/user')
 
 if (result.error) {
   console.error(result.error.message, result.status)
 } else {
-  console.log(result.response.name)
+  console.log(result.response.name, result.meta.duration)
 }
 
-const user = await unwrapRequestResult(useRequest.get<{ name: string }>('/user'))
+const user = await unwrapRequestResult(request.get<{ name: string }>('/user'))
 ```
 
-### request API
+### 完整配置
 
 ```ts
-const useRequest = createRequestClient({
+const request = createRequestClient({
   baseURL: '/api',
   timeout: 10_000,
+  concurrency: 6,
   headers: { 'x-client': 'web' },
   auth: { header: 'Authorization', type: 'Bearer' },
-  getToken: async () => 'token',
-  onRequest: ({ options }) => ({ ...options, headers: { ...options.headers, trace: '1' } }),
-  onResponse: ({ response }) => console.log(response.status),
-  onError: ({ error }) => console.warn(error.message)
+  getToken: async () => tokenStore.accessToken,
+  refreshToken: async () => {
+    const token = await refreshAccessToken()
+    tokenStore.accessToken = token
+    return token
+  },
+  retryPolicy: {
+    retries: 2,
+    delay: 250,
+    factor: 2,
+    maxDelay: 3_000,
+    jitter: true
+  },
+  responseCache: {
+    ttl: 30_000,
+    methods: ['GET'],
+    invalidateOnMutation: true
+  },
+  onRequest: ({ options }) => ({
+    ...options,
+    headers: { ...options.headers, trace: '1' }
+  }),
+  onTrace: (trace) => console.log(trace.requestId, trace.duration)
 })
 ```
 
-实例方法：
+默认行为：
 
-- `useRequest(url, options)` / `useRequest.raw(url, options)`
-- `useRequest.get/post/put/patch/delete/head/options(url, options)`
-- `useRequest.withAbort(url, options)`
-- `useRequest.abortable.get/post/put/patch/delete/head/options(url, options)`
-- `useRequest.createAbortController()` / `useRequest.isAbortError(error)`
+- GET / HEAD 相同在途请求会去重。
+- GET 缓存需要通过 `responseCache` 显式启用。
+- 仅 GET / HEAD / OPTIONS 会自动重试，默认状态码为 `408`、`409`、`425`、`429`、`500`、`502`、`503`、`504`。
+- `refreshToken` 存在时，默认在 `401` 后刷新；并发失败请求共享同一个刷新任务。
+- 请求自动生成 `x-request-id`，结果 `meta` 包含耗时、尝试次数、缓存和去重状态。
 
-### 业务校验
+单次请求可以用 `retryPolicy: false`、`dedupe: false`、`responseCache: false` 或 `skipAuthRefresh: true` 覆盖全局行为。
 
-如果接口固定返回 `{ code, data, message }`，可以用 `validateResponse` 把业务失败转成 `RequestError`：
+### 业务校验和转换
 
 ```ts
-const result = await useRequest.get<{ code: number; data: User; message: string }, 'json', User>('/profile', {
+const result = await request.get<{ code: number; data: User; message: string }, 'json', User>('/profile', {
   validateResponse: (body) => body.code === 0 || body.message,
   transform: (body) => body.data
 })
 ```
 
-### request 工具函数
+`validateResponse` 返回 `false`、错误消息或 `RequestError` 时，请求会返回失败结果。
 
-- `mergeHeaders(source, extra)`：合并 headers，后者覆盖前者。
-- `omitHeaders(source, names)`：复制 headers 并移除指定字段。
-- `headersToObject(headers)`：把 `HeadersInit` 转成普通对象。
-- `getHeader(headers, name)`：安全读取 header。
-- `createAuthorizationHeader(token, auth)`：按配置生成鉴权 header。
-- `createQueryString(params)` / `appendQuery(url, params)`：序列化 query，自动忽略 `null` / `undefined`。
-- `mergeSignals(...signals)`：合并多个 `AbortSignal`。
-- `createTimeoutSignal(timeout)`：创建超时中断信号，可配合 `mergeSignals` 使用。
-- `createRequestId(prefix)`：生成简单 request id。
-- `isRequestSuccess(result)` / `isRequestFailure(result)`：类型守卫。
-- `mapRequestResult(result, transform)`：只转换成功响应，失败结果原样透传。
-- `unwrapRequestResult(result)`：请求错误时抛出 `RequestError`，否则返回 `response`。
-- `normalizeRequestError(error)` / `isRequestError(error)`：错误标准化与类型判断。
+### 中间件
 
 ```ts
-import { appendQuery, createTimeoutSignal, mapRequestResult, mergeSignals, unwrapRequestResult } from 'toolsx/shared'
+const removeMiddleware = request.use(async (context, next) => {
+  context.options.headers = {
+    ...context.options.headers,
+    'x-feature': 'profile'
+  }
 
-const url = appendQuery('/users', { page: 1, keyword: 'tom' })
-const result = await useRequest.get<{ list: User[] }>(url, {
-  signal: mergeSignals(createTimeoutSignal(5_000))
+  const result = await next()
+  return result
 })
 
-const listResult = mapRequestResult(result, (data) => data.list)
-const list = await unwrapRequestResult(listResult)
+removeMiddleware()
 ```
+
+### 缓存、进度和中断
+
+```ts
+const result = await request.post('/upload', {
+  body: file,
+  onUploadProgress: ({ loaded, total, percent, done }) => {},
+  onDownloadProgress: ({ loaded, total, percent, done }) => {}
+})
+
+await request.invalidateCache('/users')
+request.cache.clear()
+
+const task = request.abortable.get('/slow')
+task.abort()
+await task.promise
+```
+
+Fetch 在不同运行环境下无法统一提供逐字节上传事件，因此上传回调至少报告开始和完成状态；下载回调会在响应流读取过程中报告字节进度。
+
+### 实例方法
+
+- `request(url, options)` / `request.raw(url, options)`
+- `request.get/post/put/patch/delete/head/options`
+- `request.withAbort` / `request.abortable.*`
+- `request.use(middleware)`
+- `request.invalidateCache(url, options)` / `request.cache.*`
+- `request.createAbortController()` / `request.isAbortError(error)`
+
+`raw` 返回原始 `FetchResponse`，不使用结果转换、业务校验、缓存和中间件。
+
+### request 工具函数
+
+- Header：`mergeHeaders`、`omitHeaders`、`headersToObject`、`getHeader`、`createAuthorizationHeader`
+- Query：`createQueryString`、`appendQuery`
+- Signal：`mergeSignals`、`createTimeoutSignal`
+- Result：`isRequestSuccess`、`isRequestFailure`、`mapRequestResult`、`unwrapRequestResult`
+- Error：`RequestError`、`normalizeRequestError`、`isRequestError`
+- Trace：`createRequestId`
 
 ## Cookie
 
-`Cookie` 是浏览器端 cookie 读写工具，依赖 `document.cookie`。
+`Cookie` 支持默认配置、JSON、批量读取、清理和 SSR 安全降级。
 
 ```ts
-import { Cookie } from 'toolsx/shared'
+import { Cookie, parseCookieHeader, serializeCookie } from 'toolsx/shared'
 
-const cookie = new Cookie()
+const cookie = new Cookie({ sameSite: 'Lax', secure: true })
 
-cookie.set('token', 'abc', {
-  maxAge: 60 * 30,
-  sameSite: 'Lax',
-  secure: true,
-  onSuccess: () => console.log('cookie saved')
-})
+cookie.setJSON('profile', { id: 1, name: 'Tom' }, { maxAge: 60 * 30 })
+const profile = cookie.getJSON<{ id: number; name: string }>('profile')
 
-const token = cookie.get('token')
-cookie.remove('token')
+cookie.has('profile')
+cookie.getAll()
+cookie.remove('profile')
+cookie.clear()
+
+parseCookieHeader('token=abc; theme=dark')
+serializeCookie('token', 'abc', { path: '/', sameSite: 'Lax' })
 ```
 
-### Cookie API
+API：
 
-- `set(name, value, options)`：写入 cookie，会自动编码 name/value。
-- `get(name)`：读取 cookie，未命中时返回 `null`。
-- `remove(name, options)`：删除指定 cookie，可传 `path` / `domain` 保持与写入时一致。
+- `set` / `get` / `remove`
+- `setJSON` / `getJSON`
+- `getAll` / `has` / `clear`
+- `isAvailable`
+- `parseCookieHeader` / `serializeCookie`
 
-`CookieOptions`：
-
-- `expires`：过期时间，支持 `Date` 或毫秒时间戳。
-- `maxAge`：有效秒数。
-- `path`：默认 `/`。
-- `domain`：cookie domain。
-- `sameSite`：`Strict` / `Lax` / `None`。
-- `secure`：是否添加 `Secure`。
-- `onSuccess`：写入完成后的回调。
+服务端没有 `document` 时，默认实例的写入方法返回 `false`，读取返回空结果；也可以在构造函数中传入自定义 `CookieAdapter`。浏览器 JavaScript 无法创建 `HttpOnly` Cookie，需要由服务端响应头设置。
 
 ## StorageWithExpiration
 
-`StorageWithExpiration` 为 `localStorage` / `sessionStorage` 增加 JSON 序列化和过期状态能力。它依赖浏览器 `Storage` API，也提供内存 storage 兜底。
+`StorageWithExpiration` 为任意兼容 `Storage` 的实现增加 TTL、滑动过期、命名空间、版本迁移、容量降级和跨标签页通知。
 
 ```ts
-import { createMemoryStorage, isStorageAvailable, StorageWithExpiration } from 'toolsx/shared'
+import { StorageWithExpiration, createMemoryStorage, isStorageAvailable } from 'toolsx/shared'
 
 const rawStorage = isStorageAvailable(localStorage) ? localStorage : createMemoryStorage()
 const storage = new StorageWithExpiration(rawStorage, {
+  namespace: 'my-app',
   validateKey: false,
-  onParseError: (error, key) => console.warn('bad storage item:', key, error)
+  version: 2,
+  slidingExpiration: 30 * 60_000,
+  sync: true,
+  migrate: (value, { fromVersion }) => {
+    return fromVersion === 1 ? migrateProfile(value) : value
+  },
+  onParseError: (error, key) => console.warn(key, error)
 })
 
-storage.setItem(
-  'user-profile',
-  { name: 'Tom' },
-  {
-    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000)
-  }
-)
-
-const result = storage.getItem<{ name: string }>('user-profile')
-
-if (result.expired) {
-  console.log('expired profile:', result.value)
-} else if (result.found) {
-  console.log(result.value.name)
-}
-
+storage.setItem('user-profile', { name: 'Tom' }, { ttl: 60_000 })
 const profile = storage.getValue<{ name: string }>('user-profile')
-storage.removeItem('user-profile')
+const settings = storage.getOrSet('settings', () => ({ theme: 'light' }))
+
+const unsubscribe = storage.subscribe((change) => {
+  console.log(change.type, change.key, change.source)
+})
+
+storage.keys()
+storage.has('settings')
+storage.removeItem('settings')
+storage.clear()
+unsubscribe()
+storage.destroy()
 ```
 
-### StorageWithExpiration API
+说明：
 
-- `new StorageWithExpiration(storage, options)`：传入 `localStorage`、`sessionStorage` 或兼容 `Storage` 的对象。
-- `setItem(key, value, options)`：写入任意可序列化数据；`options.expiresAt` 可传 `Date` 或毫秒时间戳。
-- `getItem<T>(key)`：返回 `{ found, expired, value, expiresAt }`；过期时会删除存储并返回 `expired: true`。
-- `getValue<T>(key)`：只返回未过期 value；不存在、已过期或解析失败时返回 `null`。
-- `removeItem(key)`：删除指定 key。
-- `clear()`：清空传入的 storage。
-- `createMemoryStorage()`：创建内存版 `Storage`，适合测试或 storage 不可用时兜底。
-- `isStorageAvailable(storage)`：检测 storage 是否可读写。
-
-`StorageWithExpirationOptions`：
-
-- `validateKey`：默认使用英文字母/下划线校验；传 `false` 关闭，也可传 `RegExp` 或函数自定义。
-- `serialize` / `deserialize`：自定义序列化逻辑。
-- `parseErrorStrategy`：解析失败时 `remove` 或 `keep`，默认 `remove`。
-- `onParseError`：解析失败回调。
+- `expiresAt` 使用绝对毫秒时间戳或 `Date`，`ttl` / `slidingExpiration` 使用持续毫秒数。
+- 主 Storage 写入失败时，默认降级到内存 Storage；传 `fallbackStorage: false` 可以关闭。
+- 配置 namespace 后，`clear()` 只清理当前 namespace。
+- `sync: true` 优先使用 `BroadcastChannel`，不可用时降级到 `storage` 事件。
+- `getItem` 返回 `{ found, expired, value, expiresAt, version }`，过期数据会被删除。
 
 ## EventEmitter
 
-`EventEmitter` 是轻量类型安全事件工具，适合业务模块之间做简单事件通信。
-
 ```ts
-import { createListenerHelper, EventEmitter } from 'toolsx/shared'
+import { EventEmitter } from 'toolsx/shared'
 
 type AppEvents = {
-  login: { id: string; name: string }
+  'user:login': { id: string }
   logout: undefined
 }
 
-const emitter = new EventEmitter<AppEvents>()
-const createListener = createListenerHelper<AppEvents>()
+const emitter = new EventEmitter<AppEvents>({ maxListeners: 20 })
 
-const onLogin = createListener('login', (user) => {
-  console.log(user.name)
+const unsubscribe = emitter.on('user:login', ({ id }) => console.log(id), {
+  priority: 10,
+  signal: abortController.signal
 })
 
-const unsubscribe = emitter.on('login', onLogin)
-emitter.emit('login', { id: '1', name: 'Tom' })
+emitter.once('logout', () => console.log('once'))
+emitter.onPattern('user:*', ({ eventName, payload }) => {})
+emitter.onAny(({ eventName, payload }) => {})
+
+emitter.emit('user:login', { id: '1' })
+await emitter.emitAsync('logout')
+
+const syncErrors = emitter.safeEmit('logout')
+const asyncErrors = await emitter.safeEmitAsync('logout')
 unsubscribe()
-
-emitter.once('logout', () => {
-  console.log('logout once')
-})
-emitter.emit('logout')
 ```
 
-### EventEmitter API
+API：
 
-- `on(eventName, listener)`：订阅事件，并返回取消订阅函数。
-- `off(eventName, listener)`：移除事件监听；需要传入同一个 listener 引用。
-- `once(eventName, listener)`：订阅一次性事件，并返回取消订阅函数。
-- `emit(eventName, payload)`：同步触发事件，listener 抛错会向外抛出。
-- `safeEmit(eventName, payload)`：触发事件并收集 listener 抛出的错误，不中断后续 listener。
-- `clear(eventName?)`：清空某个事件或全部事件。
-- `listenerCount(eventName)`：获取事件监听数量。
-- `createListenerHelper<T>()`：创建 listener helper，让单独声明的 listener 保留 payload 类型。
+- `on` / `off` / `once`
+- `onAny` / `onPattern`
+- `emit` / `safeEmit`
+- `emitAsync` / `safeEmitAsync`
+- `clear` / `listenerCount` / `totalListenerCount`
+- `setMaxListeners`
+- `createListenerHelper`
+
+`safeEmit` 只捕获同步抛错；异步 listener 应使用 `safeEmitAsync`。
+
+## 框架示例和 API 文档
+
+- [Vue、React、Node 示例](docs/examples.md)
+- 执行 `pnpm docs:api` 生成 TypeDoc API 网站到 `docs/api`。
+- Vite Playground 位于 `playground/vite`，包含成功、重试、缓存和业务失败状态以及代码复制示例。
+
+## 开发与发布
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+pnpm build
+pnpm playground:build
+pnpm verify
+```
+
+`pnpm verify` 会串行执行 lint、格式、类型检查、覆盖率、库构建、Playground 构建、包导出校验和 API 文档生成。版本和 CHANGELOG 使用 Changesets 管理，详情见 [发布说明](docs/release.md)。
+
+## 边界说明
+
+- `clone` 优先使用 `structuredClone`；旧环境的 JSON 降级不支持函数、循环引用等数据。
+- Cookie 和 Storage 中的“加密”不属于本库职责；敏感凭证应优先使用服务端 `HttpOnly` Cookie。
+- response cache 位于当前 request 实例内存中，不是 HTTP Cache，也不会跨进程共享。
+- 浏览器 Storage 容量、Cookie 大小和跨标签页能力受用户环境及隐私策略影响。

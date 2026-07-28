@@ -1,12 +1,109 @@
 import type { AnyFunction } from './type'
 
-export type DebouncedFunction<T extends AnyFunction> = ((...args: Parameters<T>) => void) & { cancel: () => void }
-export type ThrottledFunction<T extends AnyFunction> = ((...args: Parameters<T>) => void) & { cancel: () => void }
+export interface DebounceOptions {
+  leading?: boolean
+  maxWait?: number
+  trailing?: boolean
+}
+
+export interface ThrottleOptions {
+  leading?: boolean
+  trailing?: boolean
+}
+
+export interface ControlledFunction<TResult> {
+  cancel: () => void
+  flush: () => TResult | undefined
+  pending: () => boolean
+}
+
+export type DebouncedFunction<T extends AnyFunction> = ((...args: Parameters<T>) => ReturnType<T> | undefined) & ControlledFunction<ReturnType<T>>
+export type ThrottledFunction<T extends AnyFunction> = DebouncedFunction<T>
+
+export interface RetryContext {
+  attempt: number
+  retriesLeft: number
+  signal?: AbortSignal
+}
+
+export interface RetryOptions {
+  delay?: number | ((context: RetryContext & { error: unknown }) => number)
+  factor?: number
+  jitter?: boolean | ((delay: number, context: RetryContext & { error: unknown }) => number)
+  maxDelay?: number
+  retries?: number
+  shouldRetry?: (error: unknown, context: RetryContext) => boolean | Promise<boolean>
+  signal?: AbortSignal
+}
+
+export interface PromisePoolOptions {
+  signal?: AbortSignal
+}
+
+export interface MemoizedFunction<T extends AnyFunction, TKey> {
+  (...args: Parameters<T>): ReturnType<T>
+  cache: Map<TKey, ReturnType<T>>
+  clear: () => void
+  delete: (key: TKey) => boolean
+}
+
+export interface MemoizeOptions<T extends AnyFunction, TKey> {
+  cache?: Map<TKey, ReturnType<T>>
+  resolver?: (...args: Parameters<T>) => TKey
+}
+
+export interface MemoizeAsyncOptions<T extends (...args: never[]) => Promise<unknown>, TKey> {
+  cacheRejected?: boolean
+  resolver?: (...args: Parameters<T>) => TKey
+  ttl?: number
+}
+
+export interface MemoizeAsyncCacheEntry<TPromise extends Promise<unknown>> {
+  expiresAt: number
+  promise: TPromise
+}
+
+export type MemoizedAsyncFunction<T extends (...args: never[]) => Promise<unknown>, TKey> = T & {
+  cache: Map<TKey, MemoizeAsyncCacheEntry<ReturnType<T>>>
+  clear: () => void
+  delete: (key: TKey) => boolean
+}
 
 export const noop = () => {}
 
-export function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+function createAbortError(signal?: AbortSignal) {
+  if (signal?.reason instanceof Error) {
+    return signal.reason
+  }
+
+  return new DOMException('Operation aborted', 'AbortError')
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw createAbortError(signal)
+  }
+}
+
+export function sleep(ms: number, signal?: AbortSignal) {
+  throwIfAborted(signal)
+
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => {
+        signal?.removeEventListener('abort', abort)
+        resolve()
+      },
+      Math.max(0, ms)
+    )
+
+    const abort = () => {
+      clearTimeout(timer)
+      reject(createAbortError(signal))
+    }
+
+    signal?.addEventListener('abort', abort, { once: true })
+  })
 }
 
 export async function tryCatch<T, TError = unknown>(promise: Promise<T>) {
@@ -17,17 +114,40 @@ export async function tryCatch<T, TError = unknown>(promise: Promise<T>) {
   }
 }
 
-export async function retry<T>(fn: () => Promise<T>, times = 3, delay = 0) {
+export async function retry<T>(fn: (context: RetryContext) => Promise<T>, options?: RetryOptions): Promise<T>
+export async function retry<T>(fn: (context: RetryContext) => Promise<T>, times?: number, delay?: number): Promise<T>
+export async function retry<T>(fn: (context: RetryContext) => Promise<T>, timesOrOptions: number | RetryOptions = 3, legacyDelay = 0): Promise<T> {
+  const legacy = typeof timesOrOptions === 'number'
+  const options = legacy ? { delay: legacyDelay, retries: timesOrOptions - 1 } : timesOrOptions
+  const retries = Math.max(0, options.retries ?? 2)
+  const maxAttempts = retries + 1
+
+  if (legacy && timesOrOptions <= 0) {
+    throw new RangeError('times must be greater than 0')
+  }
+
   let lastError: unknown
 
-  for (let attempt = 0; attempt < times; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const context: RetryContext = { attempt, retriesLeft: maxAttempts - attempt, signal: options.signal }
+    throwIfAborted(options.signal)
+
     try {
-      return await fn()
+      return await fn(context)
     } catch (error) {
       lastError = error
 
-      if (delay > 0 && attempt < times - 1) {
-        await sleep(delay)
+      if (attempt >= maxAttempts || (options.shouldRetry && !(await options.shouldRetry(error, context)))) {
+        throw error
+      }
+
+      const delayContext = { ...context, error }
+      const baseDelay = typeof options.delay === 'function' ? options.delay(delayContext) : (options.delay ?? 0) * Math.pow(options.factor ?? 1, attempt - 1)
+      const cappedDelay = Math.min(Math.max(0, baseDelay), options.maxDelay ?? Number.POSITIVE_INFINITY)
+      const wait = typeof options.jitter === 'function' ? options.jitter(cappedDelay, delayContext) : options.jitter ? Math.random() * cappedDelay : cappedDelay
+
+      if (wait > 0) {
+        await sleep(wait, options.signal)
       }
     }
   }
@@ -60,62 +180,164 @@ export function withResolvers<T>() {
   return { promise, resolve, reject }
 }
 
-export function debounce<T extends AnyFunction>(fn: T, wait = 0): DebouncedFunction<T> {
+export function debounce<T extends AnyFunction>(fn: T, wait = 0, options: DebounceOptions = {}): DebouncedFunction<T> {
+  const { leading = false, maxWait, trailing = true } = options
   let timer: ReturnType<typeof setTimeout> | undefined
+  let maxTimer: ReturnType<typeof setTimeout> | undefined
+  let lastArgs: Parameters<T> | undefined
+  let lastThis: unknown
+  let result: ReturnType<T> | undefined
 
-  const debounced = ((...args: Parameters<T>) => {
-    if (timer) {
-      clearTimeout(timer)
+  const invoke = () => {
+    if (!lastArgs) return result
+
+    const args = lastArgs
+    const thisArg = lastThis
+    lastArgs = undefined
+    lastThis = undefined
+    result = fn.apply(thisArg, args) as ReturnType<T>
+    return result
+  }
+
+  const clearTimers = () => {
+    if (timer) clearTimeout(timer)
+    if (maxTimer) clearTimeout(maxTimer)
+    timer = undefined
+    maxTimer = undefined
+  }
+
+  const finish = () => {
+    timer = undefined
+    if (trailing) invoke()
+    if (maxTimer) clearTimeout(maxTimer)
+    maxTimer = undefined
+  }
+
+  const debounced = function (this: unknown, ...args: Parameters<T>) {
+    const shouldInvokeLeading = leading && !timer
+    lastArgs = args
+    // oxlint-disable-next-line typescript/no-this-alias -- Debounce must preserve the caller's dynamic receiver until invocation.
+    lastThis = this
+
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(finish, Math.max(0, wait))
+
+    if (maxWait !== undefined && maxWait >= 0 && !maxTimer) {
+      maxTimer = setTimeout(() => {
+        if (timer) clearTimeout(timer)
+        timer = undefined
+        maxTimer = undefined
+        invoke()
+      }, maxWait)
     }
 
-    timer = setTimeout(() => {
-      timer = undefined
-      fn(...args)
-    }, wait)
-  }) as DebouncedFunction<T>
+    if (shouldInvokeLeading) invoke()
+
+    return result
+  } as DebouncedFunction<T>
 
   debounced.cancel = () => {
-    if (timer) {
-      clearTimeout(timer)
-      timer = undefined
-    }
+    clearTimers()
+    lastArgs = undefined
+    lastThis = undefined
   }
+  debounced.flush = () => {
+    if (!timer && !maxTimer) return result
+    clearTimers()
+    return trailing ? invoke() : result
+  }
+  debounced.pending = () => Boolean(timer || maxTimer)
 
   return debounced
 }
 
-export function throttle<T extends AnyFunction>(fn: T, wait = 0): ThrottledFunction<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let lastArgs: Parameters<T> | undefined
+export function throttle<T extends AnyFunction>(fn: T, wait = 0, options: ThrottleOptions = {}): ThrottledFunction<T> {
+  return debounce(fn, wait, {
+    leading: options.leading ?? true,
+    maxWait: wait,
+    trailing: options.trailing ?? true
+  })
+}
 
-  const run = () => {
-    if (!lastArgs) {
-      timer = undefined
-      return
-    }
-
-    const args = lastArgs
-    lastArgs = undefined
-    fn(...args)
-    timer = setTimeout(run, wait)
+export async function promisePool<T, TResult>(
+  items: readonly T[],
+  worker: (item: T, index: number, signal?: AbortSignal) => Promise<TResult>,
+  concurrency = Number.POSITIVE_INFINITY,
+  options: PromisePoolOptions = {}
+) {
+  if (concurrency <= 0) {
+    throw new RangeError('concurrency must be greater than 0')
   }
 
-  const throttled = ((...args: Parameters<T>) => {
-    lastArgs = args
+  const results = Array.from({ length: items.length }) as TResult[]
+  let nextIndex = 0
 
-    if (!timer) {
-      run()
+  const runWorker = async () => {
+    while (nextIndex < items.length) {
+      throwIfAborted(options.signal)
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await worker(items[index], index, options.signal)
     }
-  }) as ThrottledFunction<T>
-
-  throttled.cancel = () => {
-    if (timer) {
-      clearTimeout(timer)
-    }
-
-    timer = undefined
-    lastArgs = undefined
   }
 
-  return throttled
+  await Promise.all(Array.from({ length: Math.min(items.length, concurrency) }, runWorker))
+
+  return results
+}
+
+function defaultMemoizeResolver(args: readonly unknown[]) {
+  return args[0]
+}
+
+export function memoize<T extends AnyFunction, TKey = Parameters<T>[0]>(fn: T, options: MemoizeOptions<T, TKey> = {}): MemoizedFunction<T, TKey> {
+  const cache = options.cache ?? new Map<TKey, ReturnType<T>>()
+  const resolver = options.resolver ?? ((...args: Parameters<T>) => defaultMemoizeResolver(args) as TKey)
+
+  const memoized = ((...args: Parameters<T>) => {
+    const key = resolver(...args)
+
+    if (cache.has(key)) {
+      return cache.get(key) as ReturnType<T>
+    }
+
+    const result = fn(...args) as ReturnType<T>
+    cache.set(key, result)
+    return result
+  }) as MemoizedFunction<T, TKey>
+
+  memoized.cache = cache
+  memoized.clear = () => cache.clear()
+  memoized.delete = (key) => cache.delete(key)
+
+  return memoized
+}
+
+export function memoizeAsync<T extends (...args: never[]) => Promise<unknown>, TKey = Parameters<T>[0]>(fn: T, options: MemoizeAsyncOptions<T, TKey> = {}) {
+  const cache = new Map<TKey, MemoizeAsyncCacheEntry<ReturnType<T>>>()
+  const resolver = options.resolver ?? ((...args: Parameters<T>) => defaultMemoizeResolver(args) as TKey)
+
+  const memoized = ((...args: Parameters<T>) => {
+    const key = resolver(...args)
+    const cached = cache.get(key)
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.promise
+    }
+
+    const promise = fn(...args) as ReturnType<T>
+    cache.set(key, { expiresAt: options.ttl === undefined ? Number.POSITIVE_INFINITY : Date.now() + Math.max(0, options.ttl), promise })
+
+    if (!options.cacheRejected) {
+      promise.catch(() => cache.delete(key))
+    }
+
+    return promise
+  }) as unknown as MemoizedAsyncFunction<T, TKey>
+
+  memoized.cache = cache
+  memoized.clear = () => cache.clear()
+  memoized.delete = (key) => cache.delete(key)
+
+  return memoized
 }

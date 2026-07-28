@@ -1,4 +1,4 @@
-export type AnyFunction = (...args: any[]) => any
+export type AnyFunction = (...args: never[]) => unknown
 
 const objectToString = Object.prototype.toString
 

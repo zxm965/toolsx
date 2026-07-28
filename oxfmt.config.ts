@@ -9,5 +9,5 @@ export default defineConfig({
   sortImports: true,
   singleAttributePerLine: false,
   trailingComma: 'none',
-  ignorePatterns: ['prisma']
+  ignorePatterns: ['coverage', 'dist', 'docs/api', 'prisma']
 })

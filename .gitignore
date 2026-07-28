@@ -24,6 +24,9 @@ node_modules
 .cache
 dist
 dist-ssr
+coverage
+docs/api
+*.tsbuildinfo
 
 # Editor directories and files
 .idea

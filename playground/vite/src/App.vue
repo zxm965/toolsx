@@ -2,11 +2,13 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 
 import ArrayChunkDemo from './components/ArrayChunkDemo.vue'
+import CookieDemo from './components/CookieDemo.vue'
 import DataCleanDemo from './components/DataCleanDemo.vue'
 import EventLogDemo from './components/EventLogDemo.vue'
 import ExecutionRecords from './components/ExecutionRecords.vue'
 import GroupByDemo from './components/GroupByDemo.vue'
 import HeroPanel from './components/HeroPanel.vue'
+import RequestDemo from './components/RequestDemo.vue'
 import RetryDemo from './components/RetryDemo.vue'
 import StorageDemo from './components/StorageDemo.vue'
 import type { RunRecord, RunRecordInput } from './types/playground'
@@ -55,6 +57,8 @@ onMounted(async () => {
       <DataCleanDemo ref="dataDemo" @record="addRecord" />
       <StorageDemo @record="addRecord" @log="addLog" />
       <RetryDemo @record="addRecord" @log="addLog" />
+      <RequestDemo @record="addRecord" @log="addLog" />
+      <CookieDemo @record="addRecord" @log="addLog" />
       <EventLogDemo :logs="logs" />
     </section>
   </main>

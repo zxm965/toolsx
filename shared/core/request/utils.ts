@@ -145,10 +145,11 @@ export function mapRequestResult<T, TResult>(result: RequestResult<T>, transform
   }
 
   return {
-    response: transform(result.response),
+    error: null,
     headers: result.headers,
-    status: result.status,
-    error: null
+    meta: result.meta,
+    response: transform(result.response),
+    status: result.status
   }
 }
 

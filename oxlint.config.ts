@@ -9,5 +9,5 @@ export default defineConfig({
     'no-unused-labels': 'warn',
     'oxc/approx-constant': 'warn'
   },
-  ignorePatterns: ['node_modules', '.output', 'dist', 'prisma/generated', 'components.d.ts']
+  ignorePatterns: ['node_modules', '.output', 'coverage', 'dist', 'docs/api', 'prisma/generated', 'components.d.ts']
 })

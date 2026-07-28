@@ -29,28 +29,56 @@
   "sideEffects": false,
   "exports": {
     "./shared": {
+      "types": "./dist/shared/index.d.ts",
       "import": "./dist/shared/index.mjs",
-      "types": "./dist/shared/index.d.ts"
+      "default": "./dist/shared/index.mjs"
     },
     "./utils": {
+      "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.mjs",
-      "types": "./dist/utils/index.d.ts"
-    }
+      "default": "./dist/utils/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "unbuild",
+    "changeset": "changeset",
     "dev": "pnpm run -r --filter=./playground/vite dev",
-    "lint": "oxlint --fix",
-    "release": "pnpm run build && npm publish"
+    "docs:api": "typedoc",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "package:check": "node scripts/validate-package.mjs",
+    "playground:build": "pnpm --filter ./playground/vite build",
+    "prepublishOnly": "pnpm verify",
+    "release": "pnpm verify && changeset publish",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit && pnpm --filter ./playground/vite exec vue-tsc -b",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm playground:build && pnpm package:check && pnpm docs:api",
+    "version": "changeset version"
   },
   "dependencies": {
     "ofetch": "^1.5.1"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@types/node": "latest",
+    "@vitest/coverage-v8": "^4.1.10",
     "oxfmt": "^0.48.0",
     "oxlint": "^1.63.0",
-    "unbuild": "^3.6.1"
+    "typedoc": "^0.28.20",
+    "typescript": "^5.9.3",
+    "unbuild": "^3.6.1",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "packageManager": "pnpm@11.0.9"
 }

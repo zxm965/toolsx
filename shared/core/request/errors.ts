@@ -32,7 +32,7 @@ export function normalizeRequestError(error: unknown) {
     return error
   }
 
-  if (error instanceof Error && error.name === 'AbortError') {
+  if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
     return new RequestError('Request aborted', { aborted: true, cause: error, meta: { timestamp: Date.now() } })
   }
 
@@ -40,7 +40,7 @@ export function normalizeRequestError(error: unknown) {
     return new RequestError(getErrorMessage(error.data) ?? error.response?.statusText ?? error.message, {
       status: error.response?.status,
       data: error.data,
-      aborted: error.name === 'AbortError',
+      aborted: error.name === 'AbortError' || error.cause instanceof DOMException,
       cause: error,
       meta: {
         requestId: error.response?.headers.get('x-request-id') ?? undefined,
