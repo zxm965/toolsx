@@ -1,139 +1,376 @@
 # toolsx
 
-轻量、类型安全的 TypeScript 工具库，按运行环境拆成两个入口：
+English | [简体中文](README.zh-CN.md)
 
-- `toolsx/utils`：数组、对象、字符串、异步和类型判断等无运行环境依赖的函数。
-- `toolsx/shared`：request、Cookie、Storage 和 EventEmitter 等应用侧能力。
+`toolsx` is a lightweight, type-safe TypeScript utility library for modern web applications, SDKs, and Node.js services.
 
-## 安装
+It provides two focused entry points:
+
+- `toolsx/utils`: runtime-independent array, object, string, number, JSON, async, function, and type-guard utilities.
+- `toolsx/shared`: request client, Cookie, expiring Storage, and typed EventEmitter utilities for application environments.
+
+## Requirements
+
+- Node.js 20 or newer for Node.js usage.
+- An ESM-compatible bundler or runtime.
+- Browser APIs are only required by the browser-specific features that use them.
+
+## Installation
 
 ```bash
 pnpm add toolsx
 ```
 
+```bash
+npm install toolsx
+```
+
+```bash
+yarn add toolsx
+```
+
+## Imports
+
 ```ts
-import { debounce, retry, unique } from 'toolsx/utils'
+import { debounce, deepMerge, retry, unique } from 'toolsx/utils'
 import { Cookie, EventEmitter, StorageWithExpiration, createRequestClient } from 'toolsx/shared'
 ```
 
-## utils
+There is no root `toolsx` runtime entry. Import from `toolsx/utils` or `toolsx/shared` so that the intended environment boundary stays explicit.
 
-### Type guards
-
-- `isNumber` / `isFiniteNumber`
-- `isString` / `isBoolean` / `isFunction`
-- `isObject` / `isPlainObject`
-- `isNil` / `isDefined`
-- `isEmpty`
-
-`isNumber(NaN)` 返回 `true`；需要排除 `NaN` 和无穷值时使用 `isFiniteNumber`。
-
-### Array
-
-- `toArray` / `unique` / `compact`
-- `flatten(array, depth)`
-- `intersection` / `difference` / `partition`
-- `chunk` / `last`
-- `groupBy` / `keyBy`
-- `sortBy` / `shuffle` / `sample`
+## Quick start
 
 ```ts
-import { compact, intersection, keyBy, partition } from 'toolsx/utils'
+import { createRequestClient } from 'toolsx/shared'
+import { chunk, isDefined, unique } from 'toolsx/utils'
 
-const values = compact([0, 1, null, 2])
-const sharedIds = intersection([1, 2, 3], [2, 3, 4])
+const ids = unique([1, 1, 2, 3])
+const pages = chunk(ids, 2)
+const values = [1, null, 2, undefined].filter(isDefined)
+
+const request = createRequestClient({ baseURL: '/api' })
+const result = await request.get<{ name: string }>('/profile')
+
+if (result.error) {
+  console.error(result.error.message)
+} else {
+  console.log(result.response.name, pages, values)
+}
+```
+
+# Utilities
+
+All utilities in this section are exported from `toolsx/utils`.
+
+## Type guards
+
+| API                     | Behavior                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `isNumber(value)`       | Checks `typeof value === 'number'`. `NaN` is considered a number.                                      |
+| `isFiniteNumber(value)` | Checks that the value is a finite number.                                                              |
+| `isString(value)`       | Checks whether the value is a string.                                                                  |
+| `isBoolean(value)`      | Checks whether the value is a boolean.                                                                 |
+| `isFunction(value)`     | Checks whether the value is a function and narrows its callable type.                                  |
+| `isObject(value)`       | Checks for a non-`null` object. Arrays also pass.                                                      |
+| `isPlainObject(value)`  | Checks for an object whose tag is `[object Object]`.                                                   |
+| `isNil(value)`          | Checks for `null` or `undefined`.                                                                      |
+| `isDefined(value)`      | Excludes `null` and `undefined`; useful with `Array.prototype.filter`.                                 |
+| `isEmpty(value)`        | Treats nil values, empty strings/arrays/maps/sets/plain objects as empty. Other values return `false`. |
+
+```ts
+import { isDefined, isFiniteNumber } from 'toolsx/utils'
+
+const numbers = [1, null, 2, undefined].filter(isDefined)
+isFiniteNumber(Number.NaN) // false
+```
+
+## Array utilities
+
+| API                                      | Behavior                                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `toArray(value)`                         | Returns `[]` for nil values, the same array for arrays, or wraps a single value in an array. |
+| `unique(array)`                          | Removes duplicates with `Set`, preserving first-seen order.                                  |
+| `compact(array)`                         | Removes JavaScript-falsy values.                                                             |
+| `flatten(array, depth = Infinity)`       | Recursively flattens nested arrays up to `depth`.                                            |
+| `intersection(...arrays)`                | Returns unique values present in every input array.                                          |
+| `difference(array, values)`              | Returns values that are not present in `values`.                                             |
+| `partition(array, predicate)`            | Returns `[matched, unmatched]` and supports type-guard predicates.                           |
+| `chunk(array, size)`                     | Splits an array into chunks. Returns `[]` when `size <= 0`.                                  |
+| `last(array)`                            | Returns the last item or `undefined`.                                                        |
+| `groupBy(array, getKey)`                 | Groups items into `Record<Key, Item[]>`.                                                     |
+| `keyBy(array, getKey)`                   | Indexes items into `Record<Key, Item>`; later duplicate keys overwrite earlier values.       |
+| `sortBy(array, getValue, order = 'asc')` | Returns a sorted copy using string, number, or `Date` keys.                                  |
+| `shuffle(array, random = Math.random)`   | Returns a Fisher-Yates shuffled copy.                                                        |
+| `sample(array, random = Math.random)`    | Returns one random item or `undefined` for an empty array.                                   |
+
+```ts
+import { flatten, groupBy, intersection, keyBy, partition } from 'toolsx/utils'
+
+const nested = flatten([1, [2, [3]]])
+const shared = intersection([1, 2, 3], [2, 3, 4])
 const [enabled, disabled] = partition(users, (user) => user.enabled)
+const grouped = groupBy(users, (user) => user.role)
 const usersById = keyBy(users, (user) => user.id)
 ```
 
-### Object
+## Object utilities
 
-- `pick` / `omit`
-- `deepMerge` / `deepEqual` / `clone`
-- `get` / `has` / `set` / `unset`
-- `mapValues` / `mapKeys`
+| API                                | Behavior                                                                                                        |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `pick(object, keys)`               | Creates an object containing the selected keys.                                                                 |
+| `omit(object, keys)`               | Creates a shallow copy without the selected keys.                                                               |
+| `deepMerge(target, source)`        | Recursively merges plain objects and replaces non-plain values.                                                 |
+| `get(object, path, defaultValue?)` | Reads a dot path or `PropertyKey[]` path.                                                                       |
+| `has(object, path)`                | Checks whether a path exists, including paths whose value is `undefined`.                                       |
+| `set(object, path, value)`         | Mutates the object and creates missing plain-object segments.                                                   |
+| `unset(object, path)`              | Deletes a path and returns the `Reflect.deleteProperty` result.                                                 |
+| `mapValues(object, transform)`     | Maps each own key to a new value while preserving keys.                                                         |
+| `mapKeys(object, transform)`       | Maps own keys while preserving values.                                                                          |
+| `deepEqual(left, right)`           | Deeply compares objects, arrays, dates, regexes, maps, sets, typed-array views, symbols, and cyclic references. |
+| `clone(value)`                     | Uses `structuredClone` when available and falls back to JSON cloning.                                           |
 
-`set`、`unset` 和 `deepMerge` 会拒绝 `__proto__`、`constructor`、`prototype` 路径，避免原型污染。
+`deepMerge`, `get`, `has`, `set`, and `unset` reject `__proto__`, `constructor`, and `prototype` path segments to prevent prototype-pollution access.
 
 ```ts
-import { deepMerge, get, has, set } from 'toolsx/utils'
+import { deepMerge, get, has, set, unset } from 'toolsx/utils'
 
-const options = deepMerge({ theme: { color: 'red' } }, { theme: { size: 12 } })
-set(options, 'theme.color', 'blue')
+const settings = deepMerge({ theme: { color: 'red' } }, { theme: { size: 12 } })
 
-get<string>(options, 'theme.color')
-has(options, 'theme.size')
+set(settings, 'theme.color', 'blue')
+get<string>(settings, 'theme.color') // blue
+has(settings, 'theme.size') // true
+unset(settings, 'theme.size')
 ```
 
-### Number / String
+## Number utilities
 
-- `clamp` / `randomInt`
-- `capitalize` / `camelCase` / `pascalCase` / `kebabCase` / `snakeCase`
-- `trim` / `truncate`
-- `escapeHtml` / `mask` / `randomString`
+| API                      | Behavior                                                 |
+| ------------------------ | -------------------------------------------------------- |
+| `clamp(value, min, max)` | Constrains a number to the inclusive range.              |
+| `randomInt(min, max)`    | Returns an integer between the rounded inclusive bounds. |
 
-### Async / Function / JSON
+## String utilities
 
-- `noop` / `sleep(ms, signal)`
-- `tryCatch` / `timeout` / `withResolvers`
-- `retry`
-- `debounce` / `throttle`
-- `promisePool`
-- `memoize` / `memoizeAsync`
-- `safeJsonParse` / `safeJsonStringify`
+| API                                                                  | Behavior                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `capitalize(value)`                                                  | Uppercases the first character.                                   |
+| `camelCase(value)`                                                   | Converts words to `camelCase`.                                    |
+| `pascalCase(value)`                                                  | Converts words to `PascalCase`.                                   |
+| `kebabCase(value)`                                                   | Converts words to `kebab-case`.                                   |
+| `snakeCase(value)`                                                   | Converts words to `snake_case`.                                   |
+| `trim(value, chars?)`                                                | Trims whitespace or the supplied character set from both ends.    |
+| `truncate(value, length, omission = '…')`                            | Truncates by Unicode code points and appends the omission marker. |
+| `escapeHtml(value)`                                                  | Escapes `&`, `<`, `>`, `"`, and `'`.                              |
+| `mask(value, visibleStart = 0, visibleEnd = 4, maskCharacter = '*')` | Masks the middle Unicode code points.                             |
+| `randomString(length, alphabet?, random?)`                           | Generates a random string. The default alphabet is alphanumeric.  |
 
 ```ts
-import { debounce, memoizeAsync, promisePool, retry } from 'toolsx/utils'
+import { escapeHtml, mask, pascalCase, truncate } from 'toolsx/utils'
 
-const data = await retry(() => loadData(), {
+pascalCase('user-profile') // UserProfile
+truncate('A long title', 8) // A long …
+mask('13800138000', 3, 4) // 138****8000
+escapeHtml('<script>') // &lt;script&gt;
+```
+
+## JSON utilities
+
+| API                                       | Behavior                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `safeJsonParse(value, fallback?)`         | Returns parsed JSON or the fallback instead of throwing.           |
+| `safeJsonStringify(value, fallback = '')` | Returns serialized JSON or the fallback when serialization throws. |
+
+## Async and function utilities
+
+| API                                                 | Behavior                                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `noop()`                                            | Empty function for default callbacks.                                                          |
+| `sleep(ms, signal?)`                                | Waits for at least `ms`; rejects when the signal aborts.                                       |
+| `tryCatch(promise)`                                 | Converts a promise into `[data, null]` or `[null, error]`.                                     |
+| `retry(fn, options?)`                               | Retries a promise-returning function with delay, backoff, jitter, filtering, and cancellation. |
+| `retry(fn, times, delay)`                           | Compatibility overload where `times` is the total number of attempts.                          |
+| `timeout(promise, ms, message?)`                    | Rejects if the promise does not settle in time. It does not cancel the original promise.       |
+| `withResolvers<T>()`                                | Returns `{ promise, resolve, reject }`.                                                        |
+| `debounce(fn, wait, options?)`                      | Creates a controlled debounced function.                                                       |
+| `throttle(fn, wait, options?)`                      | Creates a controlled throttled function.                                                       |
+| `promisePool(items, worker, concurrency, options?)` | Processes items with bounded concurrency and preserves result order.                           |
+| `memoize(fn, options?)`                             | Caches synchronous results.                                                                    |
+| `memoizeAsync(fn, options?)`                        | Caches in-flight/resolved promises with optional TTL.                                          |
+
+### Retry options
+
+| Option        | Default                      | Description                                                     |
+| ------------- | ---------------------------- | --------------------------------------------------------------- |
+| `retries`     | `2`                          | Number of retries after the first attempt.                      |
+| `delay`       | `0`                          | Base delay or a function receiving the error and retry context. |
+| `factor`      | `1`                          | Exponential multiplier applied to numeric delays.               |
+| `maxDelay`    | `Infinity`                   | Maximum computed delay.                                         |
+| `jitter`      | `false`                      | Randomizes delay or computes it with a custom function.         |
+| `shouldRetry` | Always retry until exhausted | Async-capable predicate.                                        |
+| `signal`      | —                            | Cancels waiting and future attempts.                            |
+
+```ts
+import { retry } from 'toolsx/utils'
+
+const data = await retry(({ attempt, signal }) => loadPage({ attempt, signal }), {
   retries: 3,
   delay: 200,
   factor: 2,
   maxDelay: 3_000,
   jitter: true,
-  shouldRetry: (error) => isNetworkError(error)
+  shouldRetry: (error) => isTemporaryError(error)
 })
-
-const search = debounce(runSearch, 200, {
-  leading: false,
-  trailing: true,
-  maxWait: 1_000
-})
-
-search.pending()
-search.flush()
-search.cancel()
-
-const results = await promisePool(ids, (id) => loadUser(id), 4)
-const loadUserOnce = memoizeAsync(loadUser, { ttl: 30_000 })
 ```
 
-兼容旧版调用：`retry(fn, times, delay)`。`memoize` / `memoizeAsync` 默认使用第一个参数作为缓存键，多参数函数建议传入 `resolver`。
+### Debounce and throttle controls
 
-## request
+Both returned functions expose:
 
-`createRequestClient` 基于 `ofetch`，默认不抛请求错误，而是返回结构化结果：
+- `cancel()`: cancels pending invocation.
+- `flush()`: immediately runs the pending trailing invocation and returns its value.
+- `pending()`: reports whether a timer is active.
+
+`debounce` defaults to `{ leading: false, trailing: true }` and additionally supports `maxWait`. `throttle` defaults to `{ leading: true, trailing: true }`.
+
+### Promise pool
+
+```ts
+import { promisePool } from 'toolsx/utils'
+
+const users = await promisePool(ids, (id, index, signal) => loadUser(id, { index, signal }), 4, {
+  signal: abortController.signal
+})
+```
+
+The result array follows input order. The pool rejects when a worker rejects or the signal aborts; work already in progress is not forcibly terminated unless the worker uses the supplied signal.
+
+### Memoization
+
+```ts
+import { memoize, memoizeAsync } from 'toolsx/utils'
+
+const formatUser = memoize(format, {
+  resolver: (user, locale) => `${user.id}:${locale}`
+})
+
+const loadUserOnce = memoizeAsync(loadUser, {
+  ttl: 30_000,
+  cacheRejected: false
+})
+
+formatUser.cache
+formatUser.delete('1:en')
+formatUser.clear()
+```
+
+The default memoization key is the first argument. Supply `resolver` for multi-argument functions. Rejected async results are removed by default.
+
+## Exported utility types
+
+`AnyFunction`, `Falsy`, `NestedArray`, `DebounceOptions`, `ThrottleOptions`, `ControlledFunction`, `DebouncedFunction`, `ThrottledFunction`, `RetryContext`, `RetryOptions`, `PromisePoolOptions`, `MemoizedFunction`, `MemoizeOptions`, `MemoizeAsyncOptions`, `MemoizeAsyncCacheEntry`, and `MemoizedAsyncFunction` are exported from `toolsx/utils`.
+
+# Request client
+
+All request APIs are exported from `toolsx/shared`.
+
+The client is based on `ofetch`, adds structured results, and centralizes authentication, retry, caching, deduplication, middleware, concurrency, progress, aborting, and tracing.
+
+## Basic usage
 
 ```ts
 import { createRequestClient, unwrapRequestResult } from 'toolsx/shared'
 
-export const request = createRequestClient({
-  baseURL: '/api',
+const request = createRequestClient({
+  baseURL: 'https://api.example.com',
   getToken: () => localStorage.getItem('access_token')
 })
 
-const result = await request.get<{ name: string }>('/user')
+const result = await request.get<{ id: string; name: string }>('/profile')
 
 if (result.error) {
-  console.error(result.error.message, result.status)
+  console.error(result.status, result.error.message)
 } else {
   console.log(result.response.name, result.meta.duration)
 }
 
-const user = await unwrapRequestResult(request.get<{ name: string }>('/user'))
+const profile = await unwrapRequestResult(request.get<{ id: string; name: string }>('/profile'))
 ```
 
-### 完整配置
+## Result model
+
+The default client call resolves instead of throwing request failures.
+
+```ts
+type RequestResult<T> =
+  | {
+      response: T
+      error: null
+      headers: Headers
+      status?: number
+      meta: RequestMeta
+    }
+  | {
+      response: null
+      error: RequestError
+      headers: Headers | null
+      status?: number
+      meta: RequestMeta
+    }
+```
+
+`RequestMeta` contains:
+
+| Field       | Description                                                  |
+| ----------- | ------------------------------------------------------------ |
+| `requestId` | Generated or caller-provided request ID.                     |
+| `url`       | Request URL string.                                          |
+| `method`    | Normalized HTTP method.                                      |
+| `timestamp` | Start timestamp in milliseconds.                             |
+| `duration`  | Total observed duration in milliseconds.                     |
+| `attempts`  | Number of network attempts; cache hits use `0`.              |
+| `fromCache` | `true` for an in-memory response-cache hit.                  |
+| `deduped`   | `true` when the caller joined an existing in-flight request. |
+
+Use `unwrapRequestResult` when exception-based control flow is preferred.
+
+`RequestError<T>` extends `Error` and exposes optional `status`, response `data`, `aborted`, request `meta`, and `cause`. `normalizeRequestError` preserves existing `RequestError` values and normalizes Fetch, timeout, abort, native `Error`, and unknown failures.
+
+## Client defaults
+
+| Behavior                | Default                                        |
+| ----------------------- | ---------------------------------------------- |
+| Timeout                 | `15_000` ms                                    |
+| Header                  | `Accept: application/json`                     |
+| Request ID header       | `x-request-id`                                 |
+| In-flight deduplication | Enabled for GET and HEAD                       |
+| Response cache          | Disabled until configured                      |
+| Retry count             | 2 retries after the first attempt              |
+| Retry delay             | 250 ms, factor 2, max 3 seconds, random jitter |
+| Retry methods           | GET, HEAD, OPTIONS                             |
+| Retry statuses          | 408, 409, 425, 429, 500, 502, 503, 504         |
+
+## Client configuration
+
+`createRequestClient(options)` accepts normal `ofetch` options plus:
+
+| Option               | Description                                                                   |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `headers`            | Default headers merged with request headers.                                  |
+| `auth`               | `{ header?, type? }` or `false`. Defaults to `Authorization: Bearer <token>`. |
+| `getToken`           | Sync or async token getter.                                                   |
+| `refreshToken`       | Refreshes an expired token; concurrent refreshes share one promise.           |
+| `shouldRefreshToken` | Custom async-capable refresh predicate. Default: status `401`.                |
+| `retryPolicy`        | Retry configuration or `false`.                                               |
+| `responseCache`      | In-memory response-cache configuration or `false`.                            |
+| `dedupe`             | Enables/disables safe-method in-flight deduplication.                         |
+| `concurrency`        | Maximum simultaneous network executions. Must be greater than zero.           |
+| `middlewares`        | Initial middleware list.                                                      |
+| `requestIdHeader`    | Header name or `false` to disable injection.                                  |
+| `fetch`              | Custom fetch implementation for alternate runtimes or adapters.               |
+| `onRequest`          | May return modified fetch options before auth/header resolution finishes.     |
+| `onResponse`         | Observes successful network responses. Hook errors are ignored.               |
+| `onError`            | Observes final structured failures. Hook errors are ignored.                  |
+| `onTrace`            | Observes final timing/status metadata. Hook errors are ignored.               |
 
 ```ts
 const request = createRequestClient({
@@ -141,8 +378,7 @@ const request = createRequestClient({
   timeout: 10_000,
   concurrency: 6,
   headers: { 'x-client': 'web' },
-  auth: { header: 'Authorization', type: 'Bearer' },
-  getToken: async () => tokenStore.accessToken,
+  getToken: () => tokenStore.accessToken,
   refreshToken: async () => {
     const token = await refreshAccessToken()
     tokenStore.accessToken = token
@@ -160,39 +396,104 @@ const request = createRequestClient({
     methods: ['GET'],
     invalidateOnMutation: true
   },
-  onRequest: ({ options }) => ({
-    ...options,
-    headers: { ...options.headers, trace: '1' }
-  }),
   onTrace: (trace) => console.log(trace.requestId, trace.duration)
 })
 ```
 
-默认行为：
+## Per-request options
 
-- GET / HEAD 相同在途请求会去重。
-- GET 缓存需要通过 `responseCache` 显式启用。
-- 仅 GET / HEAD / OPTIONS 会自动重试，默认状态码为 `408`、`409`、`425`、`429`、`500`、`502`、`503`、`504`。
-- `refreshToken` 存在时，默认在 `401` 后刷新；并发失败请求共享同一个刷新任务。
-- 请求自动生成 `x-request-id`，结果 `meta` 包含耗时、尝试次数、缓存和去重状态。
+Each normal request accepts `ofetch` options plus:
 
-单次请求可以用 `retryPolicy: false`、`dedupe: false`、`responseCache: false` 或 `skipAuthRefresh: true` 覆盖全局行为。
-
-### 业务校验和转换
+| Option                             | Description                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| `transform(data)`                  | Maps successful response data, synchronously or asynchronously.               |
+| `validateResponse(data, response)` | Returns `false`, a message, or `RequestError` to create a structured failure. |
+| `retryPolicy`                      | Overrides or disables client retry.                                           |
+| `responseCache`                    | Enables, configures, or disables cache for the request.                       |
+| `cacheKey`                         | Explicit response-cache key.                                                  |
+| `dedupe`                           | Overrides in-flight deduplication.                                            |
+| `dedupeKey`                        | Explicit in-flight deduplication key.                                         |
+| `skipAuthRefresh`                  | Prevents token refresh for this request.                                      |
+| `onUploadProgress`                 | Receives upload progress events.                                              |
+| `onDownloadProgress`               | Receives streamed download progress events.                                   |
 
 ```ts
-const result = await request.get<{ code: number; data: User; message: string }, 'json', User>('/profile', {
+type ApiEnvelope<T> = { code: number; data: T; message: string }
+type User = { id: string; name: string }
+
+const result = await request.get<ApiEnvelope<User>, 'json', User>('/profile', {
   validateResponse: (body) => body.code === 0 || body.message,
   transform: (body) => body.data
 })
 ```
 
-`validateResponse` 返回 `false`、错误消息或 `RequestError` 时，请求会返回失败结果。
+## Methods
 
-### 中间件
+- Callable instance: `request(url, options)`
+- Shortcuts: `request.get`, `post`, `put`, `patch`, `delete`, `head`, `options`
+- Raw response: `request.raw(url, options)`
+- Abortable call: `request.withAbort(url, options)`
+- Abortable shortcuts: `request.abortable.get/post/put/patch/delete/head/options`
+- Middleware registration: `request.use(middleware)`
+- Cache invalidation: `request.invalidateCache(url, options)`
+- Cache controller: `request.cache`
+- Abort helpers: `request.createAbortController()`, `request.isAbortError(error)`
+
+`request.raw` returns `FetchResponse` inside `RequestResult`. It still applies default headers, authentication, concurrency, progress, request/response/error hooks, and tracing, but it does not apply normal-request transforms, business validation, wrapper retry, response caching, deduplication, or middleware.
+
+## Token refresh
+
+When `refreshToken` is configured, a final `401` triggers one refresh attempt unless `shouldRefreshToken` says otherwise. Requests failing concurrently with the same token share the refresh promise. The response cache is cleared after refresh.
+
+The refresh function should update the token source used by `getToken`, or return the new token directly.
+
+## Retry
+
+`RequestRetryOptions` supports:
+
+| Option        | Description                                                               |
+| ------------- | ------------------------------------------------------------------------- |
+| `retries`     | Retries after the first attempt.                                          |
+| `delay`       | Base delay or a function of `RequestRetryContext`.                        |
+| `factor`      | Exponential multiplier for numeric delay.                                 |
+| `maxDelay`    | Maximum delay.                                                            |
+| `jitter`      | Boolean random jitter or custom jitter function.                          |
+| `methods`     | Allowed HTTP methods.                                                     |
+| `statusCodes` | Allowed failure statuses. Network errors have no status and are eligible. |
+| `shouldRetry` | Async-capable final predicate.                                            |
+| `onRetry`     | Observability callback receiving the chosen delay.                        |
+
+Abort failures are never retried.
+
+## Deduplication and cache
+
+Deduplication shares an in-flight promise for matching GET/HEAD keys. Cache is opt-in and stores successful transformed results in the request instance memory.
+
+Default keys include method, base URL, URL, query, body, and a hash of the auth token. Use `cacheKey` or `dedupeKey` when application-specific identity is required.
+
+`ResponseCacheOptions`:
+
+| Option                 | Default   | Description                                                  |
+| ---------------------- | --------- | ------------------------------------------------------------ |
+| `ttl`                  | `30_000`  | Entry lifetime in milliseconds.                              |
+| `methods`              | `['GET']` | Cacheable methods.                                           |
+| `invalidateOnMutation` | `true`    | Clears entries after successful POST/PUT/PATCH/DELETE calls. |
+
+Cache controller methods:
+
+- `request.cache.clear()`
+- `request.cache.delete(key)`
+- `request.cache.has(key)`
+- `request.cache.keys()`
+- `request.cache.size`
+- `await request.invalidateCache(url, options)`
+
+This is an in-memory application cache, not the browser HTTP cache, and it is not shared across processes or request-client instances.
+
+## Middleware
 
 ```ts
-const removeMiddleware = request.use(async (context, next) => {
+const remove = request.use(async (context, next) => {
   context.options.headers = {
     ...context.options.headers,
     'x-feature': 'profile'
@@ -202,58 +503,63 @@ const removeMiddleware = request.use(async (context, next) => {
   return result
 })
 
-removeMiddleware()
+remove()
 ```
 
-### 缓存、进度和中断
+Middleware wraps retry execution and may modify `context.options` or return a result without calling `next`. Calling `next` more than once becomes a structured request failure.
+
+## Progress and aborting
 
 ```ts
-const result = await request.post('/upload', {
+const upload = request.abortable.post('/files', {
   body: file,
   onUploadProgress: ({ loaded, total, percent, done }) => {},
   onDownloadProgress: ({ loaded, total, percent, done }) => {}
 })
 
-await request.invalidateCache('/users')
-request.cache.clear()
-
-const task = request.abortable.get('/slow')
-task.abort()
-await task.promise
+upload.abort('user cancelled')
+const result = await upload.promise
 ```
 
-Fetch 在不同运行环境下无法统一提供逐字节上传事件，因此上传回调至少报告开始和完成状态；下载回调会在响应流读取过程中报告字节进度。
+`RequestProgress` contains `phase`, `loaded`, optional `total`/`percent`, and `done`.
 
-### 实例方法
+The Fetch API does not expose uniform byte-by-byte upload progress in every runtime. Upload callbacks always report start and completion when configured; download callbacks report bytes while the response stream is consumed.
 
-- `request(url, options)` / `request.raw(url, options)`
-- `request.get/post/put/patch/delete/head/options`
-- `request.withAbort` / `request.abortable.*`
-- `request.use(middleware)`
-- `request.invalidateCache(url, options)` / `request.cache.*`
-- `request.createAbortController()` / `request.isAbortError(error)`
+## Request utilities
 
-`raw` 返回原始 `FetchResponse`，不使用结果转换、业务校验、缓存和中间件。
+| API                                       | Behavior                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `mergeHeaders(source, extra)`             | Creates merged `Headers`; `extra` wins.                           |
+| `omitHeaders(source, names)`              | Creates headers without the selected names.                       |
+| `headersToObject(headers)`                | Converts headers into `Record<string, string>`.                   |
+| `getHeader(headers, name)`                | Case-insensitive safe lookup.                                     |
+| `createAuthorizationHeader(token, auth?)` | Creates the configured auth header or `undefined`.                |
+| `createQueryString(params)`               | Serializes primitives, dates, and arrays; ignores nil values.     |
+| `appendQuery(url, params)`                | Adds serialized query before a URL hash.                          |
+| `mergeSignals(...signals)`                | Creates a signal that aborts when any input aborts.               |
+| `createTimeoutSignal(timeout, reason?)`   | Creates an abort signal or `undefined` for non-positive timeouts. |
+| `createRequestId(prefix?)`                | Creates a timestamp/random request ID.                            |
+| `isRequestSuccess(result)`                | Success type guard.                                               |
+| `isRequestFailure(result)`                | Failure type guard.                                               |
+| `mapRequestResult(result, transform)`     | Maps only a successful response.                                  |
+| `unwrapRequestResult(result)`             | Returns response or throws `RequestError`.                        |
+| `normalizeRequestError(error)`            | Converts unknown/fetch/abort errors to `RequestError`.            |
+| `isRequestError(error)`                   | `RequestError` type guard.                                        |
 
-### request 工具函数
+## Exported request types
 
-- Header：`mergeHeaders`、`omitHeaders`、`headersToObject`、`getHeader`、`createAuthorizationHeader`
-- Query：`createQueryString`、`appendQuery`
-- Signal：`mergeSignals`、`createTimeoutSignal`
-- Result：`isRequestSuccess`、`isRequestFailure`、`mapRequestResult`、`unwrapRequestResult`
-- Error：`RequestError`、`normalizeRequestError`、`isRequestError`
-- Trace：`createRequestId`
+The request entry exports `FetchOptions`, `FetchRequest`, `FetchResponse`, `MappedResponseType`, `ResponseType`, `RequestMethod`, `TokenValue`, `TokenGetter`, `RequestProgressPhase`, `RequestProgress`, `RequestProgressHandler`, `RequestRetryContext`, `RequestRetryOptions`, `ResponseCacheOptions`, `RequestOptions`, `RawRequestOptions`, `RequestMeta`, `RequestErrorOptions`, `RequestSuccess`, `RequestFailure`, `RequestResult`, hook contexts, `RequestAuthOptions`, `TokenRefreshContext`, `RequestTrace`, middleware types, `CreateRequestOptions`, `AbortableRequest`, shortcut types, `RequestCacheController`, `RequestInstance`, `QueryValue`, and `QueryParams`.
 
-## Cookie
+# Cookie
 
-`Cookie` 支持默认配置、JSON、批量读取、清理和 SSR 安全降级。
+`Cookie` provides encoded browser cookie access, JSON helpers, defaults, server adapters, and safe non-browser behavior.
 
 ```ts
 import { Cookie, parseCookieHeader, serializeCookie } from 'toolsx/shared'
 
 const cookie = new Cookie({ sameSite: 'Lax', secure: true })
 
-cookie.setJSON('profile', { id: 1, name: 'Tom' }, { maxAge: 60 * 30 })
+cookie.setJSON('profile', { id: 1, name: 'Tom' }, { maxAge: 30 * 60 })
 const profile = cookie.getJSON<{ id: number; name: string }>('profile')
 
 cookie.has('profile')
@@ -265,61 +571,133 @@ parseCookieHeader('token=abc; theme=dark')
 serializeCookie('token', 'abc', { path: '/', sameSite: 'Lax' })
 ```
 
-API：
+## Constructor and adapter
 
-- `set` / `get` / `remove`
-- `setJSON` / `getJSON`
-- `getAll` / `has` / `clear`
-- `isAvailable`
-- `parseCookieHeader` / `serializeCookie`
+```ts
+const cookie = new Cookie(defaultOptions?, adapter?)
+```
 
-服务端没有 `document` 时，默认实例的写入方法返回 `false`，读取返回空结果；也可以在构造函数中传入自定义 `CookieAdapter`。浏览器 JavaScript 无法创建 `HttpOnly` Cookie，需要由服务端响应头设置。
+`CookieAdapter` contains `read(): string` and `write(serializedCookie): void`. Without an adapter, the class reads and writes `document.cookie` when available.
 
-## StorageWithExpiration
+In an SSR/Node.js environment with no `document`, `isAvailable()` is `false`, writes return `false`, and reads return empty/null results.
 
-`StorageWithExpiration` 为任意兼容 `Storage` 的实现增加 TTL、滑动过期、命名空间、版本迁移、容量降级和跨标签页通知。
+## Cookie options
+
+| Option      | Description                                                    |
+| ----------- | -------------------------------------------------------------- |
+| `expires`   | `Date` or absolute millisecond timestamp. Invalid dates throw. |
+| `maxAge`    | Lifetime in seconds.                                           |
+| `path`      | Defaults to `/`.                                               |
+| `domain`    | Cookie domain.                                                 |
+| `sameSite`  | `'Strict'`, `'Lax'`, or `'None'`.                              |
+| `secure`    | Adds the `Secure` attribute.                                   |
+| `onSuccess` | Called after adapter write succeeds.                           |
+
+## Cookie methods
+
+| API                                      | Behavior                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| `set(name, value, options?)`             | Encodes and writes a cookie; returns availability/success boolean.   |
+| `setJSON(name, value, options?)`         | JSON-serializes and writes; throws for non-serializable `undefined`. |
+| `get(name)`                              | Returns decoded value or `null`.                                     |
+| `getJSON(name, fallback?)`               | Parses JSON or returns fallback/`null`.                              |
+| `getAll()`                               | Returns all decoded cookies as an object.                            |
+| `has(name)`                              | Checks own cookie presence.                                          |
+| `remove(name, options?)`                 | Expires the cookie using matching path/domain.                       |
+| `clear(options?)`                        | Removes every currently visible cookie and returns the count.        |
+| `isAvailable()`                          | Reports adapter/browser availability.                                |
+| `parseCookieHeader(header)`              | Decodes a Cookie header or `document.cookie` string.                 |
+| `serializeCookie(name, value, options?)` | Produces a Set-Cookie/document-cookie assignment string.             |
+
+Browser JavaScript cannot create `HttpOnly` cookies. Set sensitive `HttpOnly` cookies from the server.
+
+Exported Cookie types: `CookieSameSite`, `CookieOptions`, and `CookieAdapter`.
+
+# Storage with expiration
+
+`StorageWithExpiration` wraps any Web Storage-compatible object with serialization, TTL, sliding expiration, namespaces, schema migration, fallback storage, and change notifications.
 
 ```ts
 import { StorageWithExpiration, createMemoryStorage, isStorageAvailable } from 'toolsx/shared'
 
-const rawStorage = isStorageAvailable(localStorage) ? localStorage : createMemoryStorage()
-const storage = new StorageWithExpiration(rawStorage, {
+const source = isStorageAvailable(localStorage) ? localStorage : createMemoryStorage()
+const storage = new StorageWithExpiration(source, {
   namespace: 'my-app',
   validateKey: false,
   version: 2,
   slidingExpiration: 30 * 60_000,
   sync: true,
-  migrate: (value, { fromVersion }) => {
-    return fromVersion === 1 ? migrateProfile(value) : value
-  },
-  onParseError: (error, key) => console.warn(key, error)
+  migrate: (value, { fromVersion }) => (fromVersion === 1 ? migrateProfile(value) : value)
 })
 
 storage.setItem('user-profile', { name: 'Tom' }, { ttl: 60_000 })
 const profile = storage.getValue<{ name: string }>('user-profile')
 const settings = storage.getOrSet('settings', () => ({ theme: 'light' }))
-
-const unsubscribe = storage.subscribe((change) => {
-  console.log(change.type, change.key, change.source)
-})
-
-storage.keys()
-storage.has('settings')
-storage.removeItem('settings')
-storage.clear()
-unsubscribe()
-storage.destroy()
 ```
 
-说明：
+## Storage options
 
-- `expiresAt` 使用绝对毫秒时间戳或 `Date`，`ttl` / `slidingExpiration` 使用持续毫秒数。
-- 主 Storage 写入失败时，默认降级到内存 Storage；传 `fallbackStorage: false` 可以关闭。
-- 配置 namespace 后，`clear()` 只清理当前 namespace。
-- `sync: true` 优先使用 `BroadcastChannel`，不可用时降级到 `storage` 事件。
-- `getItem` 返回 `{ found, expired, value, expiresAt, version }`，过期数据会被删除。
+| Option               | Default                     | Description                                                                                |
+| -------------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| `namespace`          | —                           | Prefixes physical keys and scopes `clear()`.                                               |
+| `version`            | `1`                         | Current stored-value schema version.                                                       |
+| `migrate`            | —                           | Synchronous value migration from an older version.                                         |
+| `slidingExpiration`  | —                           | Instance-wide sliding lifetime in milliseconds.                                            |
+| `fallbackStorage`    | In-memory storage           | Used when primary writes fail; `false` disables fallback.                                  |
+| `validateKey`        | Letters/underscores pattern | `false`, `RegExp`, or predicate customizes validation.                                     |
+| `serialize`          | `JSON.stringify`            | Custom item serializer.                                                                    |
+| `deserialize`        | `JSON.parse`                | Custom item deserializer.                                                                  |
+| `parseErrorStrategy` | `'remove'`                  | `'remove'` or `'keep'` invalid entries.                                                    |
+| `onParseError`       | —                           | Receives error, logical key, and raw value.                                                |
+| `onQuotaError`       | —                           | Receives primary write error and logical key.                                              |
+| `sync`               | `false`                     | Enables `BroadcastChannel` or browser `storage`-event notifications; accepts sync options. |
 
-## EventEmitter
+`StorageSyncOptions` supports `channelName` and `broadcast: false`.
+
+## Set options
+
+| Option              | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| `expiresAt`         | Absolute `Date`, millisecond timestamp, or `null`. |
+| `ttl`               | Relative lifetime in milliseconds.                 |
+| `slidingExpiration` | Per-item sliding lifetime in milliseconds.         |
+
+An explicit non-null `expiresAt` defines the initial expiry. Otherwise `ttl`, then sliding expiration, determines it.
+
+## Read result
+
+`getItem<T>(key)` returns a discriminated union:
+
+- Valid: `{ found: true, expired: false, value, expiresAt, version }`
+- Expired: `{ found: true, expired: true, value, expiresAt, version }`
+- Missing/invalid: `{ found: false, expired: false, value: null, expiresAt: null, version: null }`
+
+Expired entries are removed. Reading a valid sliding-expiration item renews its expiry.
+
+## Storage methods
+
+| API                                    | Behavior                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------- |
+| `setItem(key, value, options?)`        | Serializes and writes a versioned entry.                                  |
+| `getItem<T>(key)`                      | Returns full found/expired state.                                         |
+| `getValue<T>(key)`                     | Returns only a valid value or `null`.                                     |
+| `getOrSet(key, createValue, options?)` | Reads a valid value or creates/stores one synchronously.                  |
+| `has(key)`                             | Checks for a valid, non-expired item.                                     |
+| `keys()`                               | Returns logical keys from primary and fallback storage.                   |
+| `removeItem(key)`                      | Removes from primary and fallback storage.                                |
+| `clear()`                              | Clears the namespace, or the entire wrapped storages without a namespace. |
+| `subscribe(listener)`                  | Subscribes to local/external `set`, `remove`, and `clear` changes.        |
+| `destroy()`                            | Closes synchronization resources and clears listeners.                    |
+| `createMemoryStorage()`                | Creates a standards-compatible in-memory `Storage`.                       |
+| `isStorageAvailable(storage)`          | Performs a temporary write/remove availability check.                     |
+
+`StorageChange` contains `type`, optional `key`/`value`, and `source: 'local' | 'external'`.
+
+Exported Storage types: `StorageExpiration`, `StorageParseErrorStrategy`, `StorageChangeType`, `StorageMigrationContext`, `StorageSyncOptions`, `StorageWithExpirationOptions`, `StorageItem`, `StorageSetOptions`, `StorageGetResult`, and `StorageChange`.
+
+# Typed EventEmitter
+
+`EventEmitter<TEvents>` provides typed exact events, one-time listeners, priorities, wildcard patterns, any-event listeners, async emission, safe emission, AbortSignal cleanup, and listener-limit warnings.
 
 ```ts
 import { EventEmitter } from 'toolsx/shared'
@@ -342,47 +720,55 @@ emitter.onAny(({ eventName, payload }) => {})
 
 emitter.emit('user:login', { id: '1' })
 await emitter.emitAsync('logout')
-
-const syncErrors = emitter.safeEmit('logout')
-const asyncErrors = await emitter.safeEmitAsync('logout')
 unsubscribe()
 ```
 
-API：
+## Emitter options
 
-- `on` / `off` / `once`
-- `onAny` / `onPattern`
-- `emit` / `safeEmit`
-- `emitAsync` / `safeEmitAsync`
-- `clear` / `listenerCount` / `totalListenerCount`
-- `setMaxListeners`
-- `createListenerHelper`
+| Option                   | Default        | Description                                                            |
+| ------------------------ | -------------- | ---------------------------------------------------------------------- |
+| `maxListeners`           | `10`           | Warning threshold per exact/pattern/any group. `0` disables the limit. |
+| `onMaxListenersExceeded` | `console.warn` | Custom overflow callback.                                              |
 
-`safeEmit` 只捕获同步抛错；异步 listener 应使用 `safeEmitAsync`。
+Listener options support `priority` (higher runs first) and `signal` (auto-unsubscribe on abort).
 
-## 框架示例和 API 文档
+## EventEmitter methods
 
-- [Vue、React、Node 示例](docs/examples.md)
-- 执行 `pnpm docs:api` 生成 TypeDoc API 网站到 `docs/api`。
-- Vite Playground 位于 `playground/vite`，包含成功、重试、缓存和业务失败状态以及代码复制示例。
+| API                                      | Behavior                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| `on(eventName, listener, options?)`      | Adds an exact listener and returns unsubscribe.                           |
+| `off(eventName, listener)`               | Removes matching exact listener references.                               |
+| `once(eventName, listener, options?)`    | Removes the exact listener before its first invocation.                   |
+| `onAny(listener, options?)`              | Observes all emitted events.                                              |
+| `onPattern(pattern, listener, options?)` | Observes string event names matching `*` wildcards.                       |
+| `emit(eventName, payload?)`              | Invokes synchronously and does not await promises. Sync errors propagate. |
+| `safeEmit(eventName, payload?)`          | Collects synchronous listener errors and continues.                       |
+| `emitAsync(eventName, payload?)`         | Awaits listeners sequentially; errors reject.                             |
+| `safeEmitAsync(eventName, payload?)`     | Awaits sequentially and collects all errors.                              |
+| `clear(eventName?)`                      | Clears one exact event or all exact/pattern/any listeners.                |
+| `listenerCount(eventName)`               | Counts exact listeners for one event.                                     |
+| `totalListenerCount()`                   | Counts exact, pattern, and any listeners.                                 |
+| `setMaxListeners(value)`                 | Updates the threshold and returns the emitter.                            |
+| `createListenerHelper<TEvents>()`        | Preserves payload type when declaring listeners separately.               |
 
-## 开发与发布
+Use `emitAsync`/`safeEmitAsync` for promise-returning listeners. `safeEmit` only provides immediate synchronous error collection.
 
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm test:coverage
-pnpm build
-pnpm playground:build
-pnpm verify
-```
+Exported EventEmitter types: `EventListener`, `Unsubscribe`, `EventListenerOptions`, `EventEmitterOptions`, `EventAnyPayload`, and `EventAnyListener`.
 
-`pnpm verify` 会串行执行 lint、格式、类型检查、覆盖率、库构建、Playground 构建、包导出校验和 API 文档生成。版本和 CHANGELOG 使用 Changesets 管理，详情见 [发布说明](docs/release.md)。
+# Framework examples
 
-## 边界说明
+- [Vue, React, and Node.js examples](docs/examples.en.md)
+- [Vue、React 与 Node.js 示例（中文）](docs/examples.md)
 
-- `clone` 优先使用 `structuredClone`；旧环境的 JSON 降级不支持函数、循环引用等数据。
-- Cookie 和 Storage 中的“加密”不属于本库职责；敏感凭证应优先使用服务端 `HttpOnly` Cookie。
-- response cache 位于当前 request 实例内存中，不是 HTTP Cache，也不会跨进程共享。
-- 浏览器 Storage 容量、Cookie 大小和跨标签页能力受用户环境及隐私策略影响。
+# Runtime and security notes
+
+- Browser-only APIs degrade only where explicitly documented; runtime-independent utilities remain available in Node.js.
+- `clone` falls back to JSON cloning when `structuredClone` is unavailable, so unsupported JSON values, functions, and cyclic references are not preserved in that fallback.
+- Cookie and Storage helpers do not encrypt data. Do not treat client-side storage as a secure credential vault.
+- Prefer server-set `HttpOnly`, `Secure`, and appropriate `SameSite` cookies for sensitive browser credentials.
+- Request response caching is local memory, not persistent storage or standards-based HTTP caching.
+- Cookie and Web Storage availability/capacity depend on browser privacy policy and user settings.
+
+# License
+
+MIT

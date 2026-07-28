@@ -1,6 +1,6 @@
 {
   "name": "toolsx",
-  "version": "0.0.4",
+  "version": "0.0.6",
   "description": "Tools X",
   "keywords": [
     "common",
@@ -23,7 +23,10 @@
     "url": "git+https://github.com/zxm965/toolsx.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.zh-CN.md",
+    "docs/examples.md",
+    "docs/examples.en.md"
   ],
   "type": "module",
   "sideEffects": false,
@@ -61,7 +64,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && pnpm --filter ./playground/vite exec vue-tsc -b",
     "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm playground:build && pnpm package:check && pnpm docs:api",
-    "version": "changeset version"
+    "version:packages": "changeset version"
   },
   "dependencies": {
     "ofetch": "^1.5.1"

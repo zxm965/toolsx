@@ -28,15 +28,17 @@ pnpm verify
 ## 生成版本
 
 ```bash
-pnpm version
+pnpm version:packages
 ```
 
 该命令消费 changeset，更新 `package.json` 版本和 `CHANGELOG.md`。
 
-## 发布
+## 本地发布
 
 ```bash
 pnpm release
 ```
 
-GitHub `main` 分支上的 Release workflow 使用 `changesets/action` 创建版本 PR；合并版本 PR 后，需要仓库配置 `NPM_TOKEN` 才能发布到 npm。发布前还会执行完整 `pnpm verify`。
+`pnpm release` 会先执行完整 `pnpm verify`，再通过 Changesets 发布尚未出现在 npm registry 的版本。npm 账号需要完成登录并启用发布所需的 2FA。
+
+项目不配置 GitHub 自动发布；版本生成、npm 发布、Git commit、tag 和 push 均由维护者在本地确认后执行。

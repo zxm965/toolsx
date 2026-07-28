@@ -1,6 +1,6 @@
-# Vue、React、Node 示例
+# Vue, React, and Node.js examples
 
-[English](examples.en.md) | 简体中文
+English | [简体中文](examples.md)
 
 ## Vue
 
@@ -37,7 +37,7 @@ onMounted(async () => {
 <template>
   <p v-if="errorMessage">{{ errorMessage }}</p>
   <p v-else-if="user">{{ user.name }}</p>
-  <p v-else>加载中...</p>
+  <p v-else>Loading...</p>
 </template>
 ```
 
@@ -70,7 +70,7 @@ export function Profile() {
   }, [])
 
   if (errorMessage) return <p>{errorMessage}</p>
-  return <p>{user?.name ?? '加载中...'}</p>
+  return <p>{user?.name ?? 'Loading...'}</p>
 }
 ```
 
@@ -94,4 +94,4 @@ const users = await promisePool(ids, (id) => unwrapRequestResult(request.get<Use
 console.log(users)
 ```
 
-Node.js 20 及以上版本可以直接使用；Cookie 的默认浏览器适配器在服务端会安全降级，如需处理请求头请使用 `parseCookieHeader` / `serializeCookie`。
+Node.js 20 and newer can use the library directly. The default Cookie adapter safely degrades outside the browser; use `parseCookieHeader` and `serializeCookie` for server-side header handling.
